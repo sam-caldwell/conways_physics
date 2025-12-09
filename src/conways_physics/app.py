@@ -178,6 +178,9 @@ class ConwaysPhysics(App):
         while self._accum >= target:
             self.sim.step(1.0)
             self.runtime_s += 1.0
+            # Auto-respawn when population reaches zero
+            if not any(a.alive for a in self.sim.automata):
+                self.action_recycle()
             self._accum -= target
             # days displayed is derived in _update_status via t_abs
 

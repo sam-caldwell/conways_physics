@@ -41,6 +41,10 @@ FLYER_CLIMB_ACCEL: float = 12.0
 # Time for a corpse to be absorbed into terrain: 5 in-game days.
 CORPSE_DECAY_SECONDS: float = 5.0 * DAY_LENGTH_S
 
+# Rocks
+# Time for a landed rock to be absorbed into terrain: 10 in-game days.
+ROCK_DECAY_SECONDS: float = 10.0 * DAY_LENGTH_S
+
 # Lander jump capability
 LANDER_JUMP_COOLDOWN_DAYS: float = 7.0
 LANDER_JUMP_ASCENT_MAX_CELLS: int = 3

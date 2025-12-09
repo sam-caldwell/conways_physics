@@ -84,12 +84,17 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
             if 0 <= x < w:
                 grid[y][x] = ch
 
-    # Overlay corpses as '#'
+    # Overlay corpses and static rocks as '#'
     corpse_cells = set()
     for (ry, cx) in getattr(sim, "corpses", set()):
         if 0 <= cx < w and 0 <= ry < h:
             grid[ry][cx] = "#"
             corpse_cells.add((ry, cx))
+    rock_static_cells = set()
+    for (ry, cx) in getattr(sim, "rocks_static", set()):
+        if 0 <= cx < w and 0 <= ry < h:
+            grid[ry][cx] = "#"
+            rock_static_cells.add((ry, cx))
 
     # Build Rich Text with color states
     lines: List[Text] = []
@@ -107,7 +112,7 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
                     style = _energy_style(a.energy)
                     break
             else:
-                if (r, c) in corpse_cells:
+                if (r, c) in corpse_cells or (r, c) in rock_static_cells:
                     style = "grey70"
                 elif (r, c) in terrain_cells:
                     style = "grey50"

@@ -26,6 +26,7 @@ from .config import (
     LANDER_JUMP_ASCENT_MAX_CELLS,
     LANDER_JUMP_DISTANCE_CELLS,
     LANDER_JUMP_CHANCE,
+    ROCK_DECAY_SECONDS,
 )
 from .species import is_flyer_letter, pair_index, relative_rank
 from .terrain import flat_terrain, generate_surface
@@ -63,6 +64,33 @@ class Simulation:
     auto_rocks: bool = False
     corpses: set[tuple[int, int]] = field(default_factory=set)
     corpse_age: dict[tuple[int, int], float] = field(default_factory=dict)
+    rocks_static: set[tuple[int, int]] = field(default_factory=set)
+    rocks_age: dict[tuple[int, int], float] = field(default_factory=dict)
+
+    # -----------------------------
+    # Small internal helpers (no behavioral changes; reduce duplication)
+    # -----------------------------
+    def _age_and_collect(self, ages: dict[tuple[int, int], float], dt: float, threshold: float) -> list[tuple[int, int]]:
+        """Increment ages by dt and return positions whose age crosses ``threshold``.
+
+        This utility reduces duplication between corpse and rock decay logic.
+        """
+        if not ages:
+            return []
+        decayed: list[tuple[int, int]] = []
+        delta = max(0.0, dt)
+        for pos, age in list(ages.items()):
+            age += delta
+            ages[pos] = age
+            if age >= threshold:
+                decayed.append(pos)
+        return decayed
+
+    def _spawn_flyer_y(self, rng: random.Random, ground_y: int) -> int:
+        """Return a spawn y for flyers within top third and >= min altitude above terrain when possible."""
+        min_alt = int(round(FLYER_MIN_ALTITUDE_REPRO))
+        y_max = max(0, min(self.height // 3, int(ground_y) - min_alt))
+        return rng.randint(0, y_max) if y_max > 0 else 0
     spawned_total: int = 0
     died_total: int = 0
     eaten_total: int = 0
@@ -147,11 +175,8 @@ class Simulation:
             x = rng.randrange(self.width)
             gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
             if is_flyer_letter(letter):
-                # Spawn flyers in the top third, but ensure a minimum altitude
-                # above the terrain when possible.
-                min_alt = int(round(FLYER_MIN_ALTITUDE_REPRO))
-                y_max = max(0, min(self.height // 3, gy - min_alt))
-                y = rng.randint(0, y_max) if y_max > 0 else 0
+                # Spawn flyers in the top third with minimum altitude when possible.
+                y = self._spawn_flyer_y(rng, gy)
                 vx = rng.uniform(-0.5, 0.5)
                 vy = 0.0
             else:
@@ -194,9 +219,7 @@ class Simulation:
             letter = rng.choice(flyer_letters)
             x = rng.randrange(self.width)
             gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
-            min_alt = int(round(FLYER_MIN_ALTITUDE_REPRO))
-            y_max = max(0, min(self.height // 3, gy - min_alt))
-            y = rng.randint(0, y_max) if y_max > 0 else 0
+            y = self._spawn_flyer_y(rng, gy)
             vx = rng.uniform(-0.5, 0.5)
             vy = 0.0
             energy = 100.0
@@ -245,33 +268,16 @@ class Simulation:
             a.ate_step = False
             a.repro_step = False
 
-        # Update ages and transform long-lived landers every 30 days of lifetime.
-        # Multiple 30-day periods can trigger multiple transformations, but only
-        # while the automaton remains a lander. Each transform shifts the letter
-        # forward by two (e.g., A->C, B->D, ..., M->O which becomes a flyer).
+        # Update ages and A/B reproduction timers. Transformations applied later
+        # in the step to allow A/B auto-spawn before evolving.
         transform_period = 30.0 * DAY_LENGTH_S if DAY_LENGTH_S > 0 else float('inf')
         if transform_period < float('inf'):
             for a in self.automata:
                 if not a.alive:
                     continue
                 a.age_s += max(0.0, dt)
-                # Track time since last reproduction for A/B
                 if a.letter.upper() in ("A", "B"):
                     a.since_repro_s += max(0.0, dt)
-                if not is_flyer_letter(a.letter):
-                    # Pending transforms beyond those already applied
-                    pending = int(a.age_s // transform_period) - int(getattr(a, 'transforms_done', 0))
-                    while pending > 0 and (not is_flyer_letter(a.letter)):
-                        c = a.letter.upper()
-                        # Only transform letters A..M; guard against non-letters
-                        if "A" <= c <= "M":
-                            new_ord = ord(c) + 2
-                            a.letter = chr(new_ord)
-                            a.transforms_done = int(getattr(a, 'transforms_done', 0)) + 1
-                        else:
-                            # If not a lander letter, stop
-                            break
-                        pending -= 1
 
         # Sunlight for A/B during daylight
         if self.world.is_day:
@@ -295,22 +301,33 @@ class Simulation:
             # Decide lander horizontal intent (pursue prey / avoid predators)
             if not is_flyer_letter(a.letter) and a.alive and a.energy > 0:
                 dir_h = self._lander_choose_direction(a)
-                # Enforce climb constraint with fallback: if primary side is blocked,
-                # try the opposite side. C/D are allowed to attempt digging even when
-                # the step is blocked by terrain.
-                ix = int(round(a.x)) % max(1, self.width)
-                if dir_h != 0:
-                    can_primary = self._lander_can_step(ix, dir_h)
-                    if a.letter.upper() in ("C", "D") and not can_primary:
-                        # Allow an attempt to dig into the primary side
-                        can_primary = True
-                    if not can_primary:
-                        alt = -dir_h
-                        can_alt = self._lander_can_step(ix, alt)
-                        if a.letter.upper() in ("C", "D") and not can_alt:
-                            # Allow an attempt to dig into the alternate side
-                            can_alt = True
-                        dir_h = alt if can_alt else 0
+                ix0 = int(round(a.x)) % max(1, self.width)
+                # Pre-jump attempt if the immediate step is blocked by terrain
+                if dir_h != 0 and not self._lander_can_step(ix0, dir_h):
+                    cooldown_s = (
+                        LANDER_JUMP_COOLDOWN_DAYS * DAY_LENGTH_S if DAY_LENGTH_S > 0 else float('inf')
+                    )
+                    if (
+                        (self.world.t_abs - getattr(a, 'last_jump_time_s', -1e18)) >= cooldown_s
+                        and random.random() < LANDER_JUMP_CHANCE
+                    ):
+                        tgt_ix = (ix0 + dir_h * LANDER_JUMP_DISTANCE_CELLS) % max(1, self.width)
+                        cur_h = int(round(self.terrain[ix0])) if self.terrain else int(round(self.ground_y_at(a.x)))
+                        tgt_h = int(round(self.terrain[tgt_ix])) if self.terrain else int(round(self.ground_y_at(tgt_ix)))
+                        ascend = cur_h - tgt_h
+                        landing_cell = (max(0, min(self.height - 1, tgt_h - 1)), tgt_ix)
+                        if (
+                            ascend <= LANDER_JUMP_ASCENT_MAX_CELLS
+                            and landing_cell not in rock_cells
+                            and landing_cell not in self.corpses
+                        ):
+                            a.x = float(tgt_ix)
+                            a.y = float(landing_cell[0])
+                            a.vx = 0.0
+                            a.vy = 0.0
+                            a.last_jump_time_s = self.world.t_abs
+                            a.energy = clamp(a.energy - 2.0, 0.0, ENERGY_MAX)
+                # Choose intent; allow C/D to attempt digging on blocked primary later.
                 a.vx = float(dir_h) * 2.0
             elif is_flyer_letter(a.letter) and a.alive and a.energy > 10.0:
                 # Flyers choose a random cardinal direction with bias:
@@ -321,6 +338,7 @@ class Simulation:
                 ay = int(round(a.y))
                 prey_dirs: list[tuple[int, int]] = []
                 threat_dirs: list[tuple[int, int]] = []
+                mate_dirs: list[tuple[int, int]] = []
                 me_r = relative_rank(a.letter)
                 for dx in (-2, -1, 0, 1, 2):
                     for dy in (-2, -1, 0, 1, 2):
@@ -344,39 +362,73 @@ class Simulation:
                                 elif other_r > me_r:
                                     for _ in range(max(1, other_r - me_r)):
                                         threat_dirs.append((dx, dy))
-                # Base random weights for 4 directions: left, right, up, down
+                                if self._is_mate(a, b):
+                                    mate_dirs.append((dx, dy))
+                had_signal = bool(prey_dirs or threat_dirs or mate_dirs)
+                # Base random weights for 4 directions: left, right, up, down.
+                # Bias horizontal (left/right) 4x over vertical (up/down), and
+                # bias upward 2x over downward.
                 dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-                weights = [1.0, 1.0, 1.0, 1.0]
+                weights = [4.0, 4.0, 2.0, 1.0]
                 # Bias toward prey
                 for dx, dy in prey_dirs:
                     if dx < 0:
-                        weights[0] += 1.0
+                        weights[0] += 4.0
                     if dx > 0:
-                        weights[1] += 1.0
+                        weights[1] += 4.0
                     if dy < 0:
-                        weights[2] += 1.0
+                        weights[2] += 2.0
                     if dy > 0:
                         weights[3] += 1.0
                 # Bias away from predators
                 for dx, dy in threat_dirs:
                     if dx < 0:
-                        weights[1] += 1.0  # predator left -> go right
+                        weights[1] += 4.0  # predator left -> go right
                     if dx > 0:
-                        weights[0] += 1.0  # predator right -> go left
+                        weights[0] += 4.0  # predator right -> go left
                     if dy < 0:
                         weights[3] += 1.0  # predator above -> go down
                     if dy > 0:
-                        weights[2] += 1.0  # predator below -> go up
+                        weights[2] += 2.0  # predator below -> go up (upward 2x bias)
+                # Bias toward mates
+                for dx, dy in mate_dirs:
+                    if dx < 0:
+                        weights[0] += 8.0  # horizontal mate bias 4x vertical
+                    if dx > 0:
+                        weights[1] += 8.0
+                    if dy < 0:
+                        weights[2] += 4.0  # up is 2x down
+                    if dy > 0:
+                        weights[3] += 2.0
                 # Choose direction
-                try:
-                    import math  # noqa: F401  # keep deterministic import set
-                except Exception:
-                    pass
-                # Normalize to avoid zero-sum pathologies
-                if sum(weights) <= 0:
-                    weights = [1.0, 1.0, 1.0, 1.0]
-                choice = random.choices(range(4), weights=weights, k=1)[0]
-                dx, dy = dirs[choice]
+                if had_signal:
+                    try:
+                        import math  # noqa: F401  # keep deterministic import set
+                    except Exception:
+                        pass
+                    # Normalize to avoid zero-sum pathologies
+                    if sum(weights) <= 0:
+                        weights = [1.0, 1.0, 1.0, 1.0]
+                    # Flyers X/Y/Z: add a 'drop rock' action with weight 3x of 'down'
+                    can_drop = (
+                        a.letter.upper() in ("X", "Y", "Z") and a.energy > ROCK_DROP_THRESHOLD
+                    )
+                    down_w = weights[3]
+                    drop_w = (3.0 * down_w) if can_drop else 0.0
+                    if drop_w > 0.0:
+                        # Choice space: left,right,up,down,drop
+                        choice = random.choices(range(5), weights=weights + [drop_w], k=1)[0]
+                        if choice == 4:
+                            # Attempt drop, then choose movement among directions
+                            self.drop_rock_from(a)
+                            choice = random.choices(range(4), weights=weights, k=1)[0]
+                        dx, dy = dirs[choice]
+                    else:
+                        choice = random.choices(range(4), weights=weights, k=1)[0]
+                        dx, dy = dirs[choice]
+                else:
+                    # No visible mate/prey/predator: wander horizontally to explore
+                    dx, dy = (-1, 0) if random.random() < 0.5 else (1, 0)
                 # Apply a modest horizontal speed and a small vertical impulse
                 a.vx = float(dx) * 1.5
                 a.vy += float(dy) * 2.0
@@ -390,7 +442,11 @@ class Simulation:
             xi = int(round(a.x)) % max(1, self.width)
             yi = int(round(a.y))
             blocked_by_terrain = yi >= int(round(new_gy))
-            blocked_by_entity = (yi, xi) in self.corpses or (yi, xi) in rock_cells
+            blocked_by_entity = (
+                (yi, xi) in self.corpses
+                or (yi, xi) in rock_cells
+                or (yi, xi) in self.rocks_static
+            )
 
             # Allow C/D to dig horizontally into terrain (but not through rocks/corpses)
             if (
@@ -513,9 +569,7 @@ class Simulation:
             for a in self.automata:
                 c = a.letter.upper()
                 if c in ("X", "Y", "Z") and a.energy > ROCK_DROP_THRESHOLD:
-                    # light stochasticity
-                    import random
-
+                    # light stochasticity (module-level RNG)
                     if random.random() < 0.1:
                         self.drop_rock_from(a)
 
@@ -524,6 +578,29 @@ class Simulation:
 
         # Settle corpses into terrain over time
         self._decay_corpses(dt)
+        self._decay_rocks(dt)
+
+        # Apply species transformations (every 30 days of lifetime), after 
+        # reproduction and A/B auto-spawn have been processed in this step.
+        if transform_period < float('inf'):
+            for a in self.automata:
+                if not a.alive:
+                    continue
+                if not is_flyer_letter(a.letter):
+                    pending = int(a.age_s // transform_period) - int(getattr(a, 'transforms_done', 0))
+                    while pending > 0 and (not is_flyer_letter(a.letter)):
+                        c = a.letter.upper()
+                        if "A" <= c <= "M":
+                            new_ord = ord(c) + 2
+                            a.letter = chr(new_ord)
+                            a.transforms_done = int(getattr(a, 'transforms_done', 0)) + 1
+                        else:
+                            break
+                        pending -= 1
+
+        # Step GoL field for the next update
+        if self.width > 0 and self.height > 0:
+            self.life_grid = step_life(self.life_grid)
 
         # Idle energy drain: if an automaton neither moved, ate, nor reproduced this step,
         # reduce its energy slightly to discourage stagnation.
@@ -576,12 +653,6 @@ class Simulation:
             return sum(vals) / float(len(vals))
         return self.moves_total, avg(3), avg(7), avg(14)
 
-        # Step GoL field for the next update
-        if self.width > 0 and self.height > 0:
-            self.life_grid = step_life(self.life_grid)
-
-        # Cull dead automata list to keep things tidy (we retain entries but mark dead)
-
     def _consume_corpses(self) -> None:
         if not self.corpses:
             return
@@ -625,9 +696,13 @@ class Simulation:
             if r.active and r.y >= gy:
                 r.y = gy
                 r.active = False
-                self._bury_at_x(rx)
-                # Align rock to new surface height after stacking
-                r.y = self.ground_y_at(r.x)
+                # Place a static rock marker ('#') at air boundary to decay later
+                if self.width > 0:
+                    cx = rx % self.width
+                    cy = int(round(gy)) - 1
+                    cy = max(0, min(self.height - 1, cy))
+                    self.rocks_static.add((cy, cx))
+                    self.rocks_age[(cy, cx)] = 0.0
 
     def _resolve_predation(self) -> None:
         """Apply predation interactions based on adjacency and vision rules."""
@@ -882,18 +957,23 @@ class Simulation:
         corpse marker is removed. Decay favors eating first (consumption runs
         before this method in the step order).
         """
-        if not self.corpse_age:
-            return
-        decayed: list[tuple[int, int]] = []
-        for pos, age in list(self.corpse_age.items()):
-            age += max(0.0, dt)
-            self.corpse_age[pos] = age
-            if age >= CORPSE_DECAY_SECONDS:
-                decayed.append(pos)
+        decayed = self._age_and_collect(self.corpse_age, dt, CORPSE_DECAY_SECONDS)
         for (yi, xi) in decayed:
             self._bury_at_x(xi)
             self.corpses.discard((yi, xi))
             self.corpse_age.pop((yi, xi), None)
+
+    def _decay_rocks(self, dt: float) -> None:
+        """Advance rock ages and settle into terrain after rock decay time.
+
+        When a landed rock decays, a block is added to the terrain column and
+        the rock marker is removed.
+        """
+        decayed = self._age_and_collect(self.rocks_age, dt, ROCK_DECAY_SECONDS)
+        for (ry, cx) in decayed:
+            self._bury_at_x(cx)
+            self.rocks_static.discard((ry, cx))
+            self.rocks_age.pop((ry, cx), None)
 
     # Land movement helpers
     def _lander_can_step(self, ix: int, dir_h: int) -> bool:
@@ -955,7 +1035,10 @@ class Simulation:
             return mate_dir
         if avoid_dir != 0:
             return -avoid_dir
-        return pursue_dir
+        if pursue_dir != 0:
+            return pursue_dir
+        # Nothing visible: explore randomly
+        return -1 if random.random() < 0.5 else 1
 
     def _is_mate(self, a: Automaton, b: Automaton) -> bool:
         """Return True if ``a`` and ``b`` are mating partners (A..Y).

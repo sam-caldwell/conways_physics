@@ -25,12 +25,14 @@ class World:
         """True if the current phase is daylight."""
         return util_is_day(self.t_abs)
 
-    def sunlight_energy_gain(self, e_meal: float) -> float:
+    @staticmethod
+    def sunlight_energy_gain(e_meal: float) -> float:
         """Return A/B sunlight energy gain per second during daylight.
 
-        Over the daylight window the integral of this rate equals two meals.
+        Over the daylight window (the sunlit portion of a day), the integral of
+        this rate equals one quarter of a single meal's energy.
         """
         if DAYLIGHT_S <= 0:
             return 0.0
-        per_second = (2.0 * e_meal) / DAYLIGHT_S
+        per_second = (0.25 * e_meal) / DAYLIGHT_S
         return clamp(per_second, 0.0, ENERGY_MAX)

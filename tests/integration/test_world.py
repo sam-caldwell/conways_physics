@@ -23,9 +23,9 @@ def test_world_ticks_and_day_night_cycle():
 def test_sunlight_energy_rate_is_consistent():
     w = World()
     per_sec = w.sunlight_energy_gain(E_MEAL)
-    # Over the daylight window, total energy equals two meals
+    # Over the daylight window, total energy equals one quarter of a meal
     total_gain = per_sec * DAYLIGHT_S
-    assert abs(total_gain - (2.0 * E_MEAL)) < 1e-6
+    assert abs(total_gain - (0.25 * E_MEAL)) < 1e-6
 
 
 def test_tick_ignores_negative_dt():

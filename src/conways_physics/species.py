@@ -13,7 +13,7 @@ FLY_START = ord("N")
 
 
 def is_flyer_letter(letter: str) -> bool:
-    """Return True if ``letter`` represents a flying species (N..Z)."""
+    """Return True if ``letter`` represents a flying species (N...Z)."""
     c = letter.upper()
     return ord(c) >= FLY_START and ord(c) <= ord("Z")
 
@@ -27,8 +27,8 @@ def is_lander_letter(letter: str) -> bool:
 def pair_index(letter: str) -> int:
     """Return a pair index grouping letters into male/female pairs.
 
-    Landers (A..M): A/B->0, C/D->1, ..., M/N->6.
-    Flyers (N..Z):  N/O->100, P/Q->101, R/S->102, T/U->103, V/W->104, X/Y->105.
+    Landers (A...M): A/B->0, C/D->1, ..., M/N->6.
+    Flyers (N...Z):  N/O->100, P/Q->101, R/S->102, T/U->103, V/W->104, X/Y->105.
     Z does not have a gender; return a distinct index (999) but pair reproduction excludes Z.
     """
     c = letter.upper()
@@ -54,7 +54,7 @@ def pair_index(letter: str) -> int:
 
 
 def gender(letter: str) -> str:
-    """Return 'male' or 'female' for A..Y; 'none' for Z."""
+    """Return 'male' or 'female' for A...Y; 'none' for Z."""
     c = letter.upper()
     if c == "Z":
         return "none"
@@ -67,7 +67,7 @@ def letter_order(letter: str) -> int:
 
 
 def relative_rank(letter: str) -> int:
-    """Return a 0..12 rank aligning landers (A..M) and flyers (N..Z).
+    """Return a 0..12 rank aligning landers (A...M) and flyers (N...Z).
 
     A and N share rank 0; M and Z share rank 12. Intermediate letters align
     accordingly: B/O->1, C/P->2, ..., L/Y->11.
@@ -88,12 +88,12 @@ class Species:
 
     @property
     def is_flyer(self) -> bool:
-        """True if this species flies (N..Z)."""
+        """True if this species flies (N...Z)."""
         return is_flyer_letter(self.letter)
 
     @property
     def is_lander(self) -> bool:
-        """True if this species walks (A..M)."""
+        """True if this species walks (A...M)."""
         return is_lander_letter(self.letter)
 
     @property

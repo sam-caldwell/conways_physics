@@ -33,8 +33,8 @@ two‑panel layout: the world view and a status footer.
     (vision within Chebyshev distance ≤2; at distance 2 visibility is 50%).
   - Actively climb until altitude ≥20; bounce at the air boundary; can’t translate along ground.
 - Landers
-  - Choose direction using priorities: mate (if energy >10) > avoid predators > pursue prey. If the chosen side is
-    blocked by terrain, try the opposite side. May climb up to 1 row; larger steps block.
+  - Choose direction using priorities: mate (if energy >10) > avoid predators > pursue prey. May climb up to 1 row;
+    larger steps block.
   - C/D tunneling: when colliding laterally with terrain (not rocks/corpses), C/D eat the surface cell to carve
     tunnels.
   - Jump: when blocked by terrain, may randomly perform a single jump up 3 rows and over 2 columns in the intended
@@ -109,25 +109,6 @@ make cover       # verbose coverage report
 make build       # sdist + wheel in dist/
 ```
 
-
-## Repository Layout
-
-- `src/conways_physics/`
-  - `app.py` — Textual UI (ConwaysPhysics), key bindings, status bar
-  - `sim.py` — Simulation orchestration and rules
-  - `automata.py` — Automaton + Rock physics
-  - `species.py` — Species helpers and relative rank
-  - `terrain.py` — Surface generation
-  - `life.py` — GoL stepping
-  - `world.py` — Day/night clock
-  - `renderer.py` — Text rendering (Rich)
-  - `config.py` — Tunables and defaults
-- `tests/` — Unit + integration tests (coverage gate ≥95%)
-- `.github/workflows/ci.yml` — CI: test matrix + build and upload artifacts
-- `.github/dependabot.yml` — Weekly dependency updates (pip, GitHub Actions)
-
-
 ## License
 
 MIT. See `LICENSE.txt`.
-
