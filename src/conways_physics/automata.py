@@ -27,6 +27,7 @@ from .config import (
 )
 from .species import is_flyer_letter
 from .utils import clamp
+
 @dataclass
 class Automaton:
     """A single automaton with simple Newtonian dynamics and energy.
