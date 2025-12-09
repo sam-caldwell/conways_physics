@@ -59,9 +59,10 @@ class Automaton:
             self.energy = clamp(self.energy - 0.1 * dt, 0.0, ENERGY_MAX)
             return
 
+        ground_air = max(0.0, ground_y - 1.0)
         if self.can_fly():
             # Prefer flight: if on/at ground and not already ascending, kick upward
-            if self.y >= ground_y - 1e-6 and self.vy >= 0.0:
+            if self.y >= ground_air - 1e-6 and self.vy >= 0.0:
                 self.vy = -3.0
             # Simple vertical dynamics with drag; horizontal conserved
             weight_factor = 1.0 + 0.5 * (self.energy / ENERGY_MAX)
@@ -69,16 +70,16 @@ class Automaton:
             self.vy *= max(0.0, 1.0 - AIR_DRAG)
             self.y += self.vy * dt
             self.x += self.vx * dt
-            # Bounce against ground
-            if self.y >= ground_y:
-                self.y = ground_y
+            # Bounce against air/ground boundary (one above surface)
+            if self.y >= ground_air:
+                self.y = ground_air
                 self.vy = -self.vy * RESTITUTION
             # Flight cost only if actually moving
             if abs(self.vx) > 1e-9 or abs(self.vy) > 1e-9:
                 self.energy = clamp(self.energy - (0.5 * dt), 0.0, ENERGY_MAX)
         else:
-            # On ground: stick to ground_y and apply friction
-            self.y = ground_y
+            # On ground: stick to one-above-surface and apply friction
+            self.y = ground_air
             self.x += self.vx * dt
             # Energy increases effective mass: heavier means more frictional slowdown
             mass_factor = 1.0 - 0.5 * (self.energy / ENERGY_MAX)

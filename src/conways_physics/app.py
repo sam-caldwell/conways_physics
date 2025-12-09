@@ -84,9 +84,8 @@ class ConwaysApp(App):
         w = max(1, self.gameplay.size.width or DEFAULT_WIDTH)
         h = max(1, self.gameplay.size.height or DEFAULT_HEIGHT)
         self.sim.configure_surface_for_view(w, h, sea_level_offset=4, amplitude=3)
-        # Seed initial population (10..100 automata, random species/genders)
-        initial_n = random.randint(10, 100)
-        self.sim.seed_population(initial_n)
+        # Seed initial population: at least 100 automata, ~50% flyers/landers
+        self.sim.seed_population_balanced(100)
         # Main simulation timer
         self._sim_timer = self.set_interval(self._base_tick, self._tick_sim)
         # Status refresh timer

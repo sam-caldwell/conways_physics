@@ -4,9 +4,9 @@ from conways_physics.automata import Automaton
 
 def test_pair_reproduction_same_cell():
     sim = Simulation(width=10, height=10)
-    # C/D pair, opposite genders
-    c = Automaton(letter="C", x=2, y=5, energy=50.0)
-    d = Automaton(letter="D", x=2, y=5, energy=50.0)
+    # C/D pair, opposite genders; energies high enough to desire reproduction
+    c = Automaton(letter="C", x=2, y=5, energy=70.0)
+    d = Automaton(letter="D", x=2, y=5, energy=70.0)
     sim.add(c)
     sim.add(d)
     sim.step(0.1)

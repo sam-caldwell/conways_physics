@@ -17,9 +17,9 @@ def test_seed_population_spawns_expected_number_and_positions():
         gy = sim.terrain[x]
         if is_lander_letter(a.letter):
             landers += 1
-            assert int(round(a.y)) == int(round(gy))
+            assert int(round(a.y)) == int(round(gy)) - 1
         else:
             flyers += 1
-            assert int(round(a.y)) <= int(round(gy))
+            assert int(round(a.y)) <= int(round(gy)) - 2
         assert 0.0 <= a.energy <= 100.0
     assert flyers > 0 and landers > 0

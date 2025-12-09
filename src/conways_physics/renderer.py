@@ -8,8 +8,40 @@ from .automata import Automaton
 
 
 def slope_char(prev_y: int, y: int, next_y: int) -> str:
-    # Terrain rendered as dots only, regardless of slope
-    return "."
+    # Terrain rendered as ASCII 219 equivalent (full block)
+    return "\u2588"
+
+
+COLOR_TABLE = [
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "bright_black",
+    "bright_red",
+    "bright_green",
+    "bright_yellow",
+    "bright_blue",
+    "bright_magenta",
+    "bright_cyan",
+    "bright_white",
+]
+
+
+def _energy_style(energy: float) -> str:
+    # Map energy [0,100] to 0..15 color index
+    e = 0.0 if energy is None else float(energy)
+    if e < 0.0:
+        e = 0.0
+    if e > 100.0:
+        e = 100.0
+    idx = int(round((e / 100.0) * 15.0))
+    idx = max(0, min(15, idx))
+    return COLOR_TABLE[idx]
 
 
 def render_sim(sim: Simulation, width: int, height: int) -> Text:
@@ -17,16 +49,21 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
     w, h = width, height
     grid = [[" "] * w for _ in range(h)]
 
-    # Terrain baseline and stacks
+    # Terrain and fill below
     t = sim.terrain
     span = min(w, sim.width)
+    terrain_cells = set()
     for x in range(span):
         y = int(round(t[x]))
         prev_y = t[(x - 1) % span] if span > 0 else y
         next_y = t[(x + 1) % span] if span > 0 else y
-        # Draw slope char at surface
+        # Draw block at surface and fill below
         if 0 <= y < h:
             grid[y][x] = slope_char(int(prev_y), int(y), int(next_y))
+            terrain_cells.add((y, x))
+            for yy in range(y + 1, h):
+                grid[yy][x] = slope_char(int(y), int(yy), int(y))
+                terrain_cells.add((yy, x))
         # Draw stacked '#': represent buried items above the surface (one cell per bury)
         # We infer stacks by how far surface has moved from a nominal baseline; skip for simplicity here.
 
@@ -48,18 +85,17 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
         for c in range(w):
             ch = grid[r][c]
             style = None
-            # Color cues: match automata at this cell
+            # Color based on automaton energy mapped to 0..15 palette,
+            # or grey for terrain where no automata present
             for a in sim.automata:
                 if not a.alive:
                     continue
                 if int(round(a.x)) % max(1, w) == c and int(round(a.y)) == r:
-                    if a.eat_flash > 0:
-                        style = "red"
-                    elif a.repro_flash > 0:
-                        style = "green"
-                    elif a.starving:
-                        style = "blue"
+                    style = _energy_style(a.energy)
                     break
+            else:
+                if (r, c) in terrain_cells:
+                    style = "grey50"
             row.append(ch, style=style)
         lines.append(row)
     # Join lines with newlines

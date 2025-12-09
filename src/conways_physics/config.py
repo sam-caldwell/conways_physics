@@ -23,3 +23,7 @@ ROCK_DROP_THRESHOLD: float = 70.0
 # Simulation defaults
 DEFAULT_WIDTH: int = 40
 DEFAULT_HEIGHT: int = 24
+
+# Reproduction rules
+REPRO_ENERGY_THRESHOLD: float = 60.0
+FLYER_MIN_ALTITUDE_REPRO: float = 20.0

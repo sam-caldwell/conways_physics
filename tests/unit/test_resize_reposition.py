@@ -23,10 +23,9 @@ def test_configure_surface_rescales_automata_positions():
     # Landers remain on surface at their scaled column
     new_ix0 = int(round(lander.x))
     assert 0 <= new_ix0 < sim.width
-    assert int(round(lander.y)) == int(round(sim.terrain[new_ix0]))
+    assert int(round(lander.y)) == int(round(sim.terrain[new_ix0])) - 1
 
     # Flyers preserve height above ground (approx two rows)
     new_ix1 = int(round(flyer.x))
     new_gy1 = int(round(sim.terrain[new_ix1]))
     assert int(round(new_gy1 - flyer.y)) >= 2  # at least as high above
-

@@ -50,20 +50,21 @@ def test_flyer_attacks_lander_from_above_and_lander_eats_adjacent_flyer(monkeypa
     # Landers can eat adjacent flyers above/left/right
     sim = Simulation(width=10, height=10)
     lander = Automaton(letter="A", x=5, y=5, energy=50.0)
-    flyer = Automaton(letter="N", x=5, y=4, energy=50.0)
+    flyer = Automaton(letter="N", x=5, y=3, energy=50.0)
     sim.add(lander)
     sim.add(flyer)
     sim.step(0.0)
     assert flyer.alive is False
 
 
-def test_z_asexual_reproduction_when_flying_and_energetic():
-    sim = Simulation(width=10, height=10)
-    z = Automaton(letter="Z", x=5, y=3, energy=95.0)
+def test_z_asexual_reproduction_when_flying_and_high_altitude():
+    sim = Simulation(width=10, height=40)
+    # Place Z at altitude >= 20 above ground
+    x = 5
+    gy = int(round(sim.ground_y_at(x)))
+    z = Automaton(letter="Z", x=float(x), y=float(max(0, gy - 25)), energy=95.0)
     sim.add(z)
-    # Ensure Z can fly (energy > 20)
     sim.step(0.0)
-    # Newborn Z should be added
     assert any(a is not z and a.letter == "Z" for a in sim.automata)
 
 

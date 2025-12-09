@@ -17,13 +17,32 @@ def is_lander_letter(letter: str) -> bool:
 
 
 def pair_index(letter: str) -> int:
-    """Return the 0-based species pair index for letters A..Y.
+    """Return a pair index grouping letters into male/female pairs.
 
-    A/B -> 0, C/D -> 1, ... Y (with X/Y as 11). Z returns 12.
+    Landers (A..M): A/B->0, C/D->1, ..., M/N->6.
+    Flyers (N..Z):  N/O->100, P/Q->101, R/S->102, T/U->103, V/W->104, X/Y->105.
+    Z does not have a gender; return a distinct index (999) but pair reproduction excludes Z.
     """
     c = letter.upper()
-    i = max(0, min(25, ord(c) - LAND_START))
-    return i // 2
+    if c == "Z":
+        return 999
+    if c < "N":  # A..M landers, simple adjacent pairs
+        i = ord(c) - LAND_START
+        return i // 2
+    # Flyers use explicit adjacent pairs starting at N/O
+    flyer_pairs = [
+        ("N", "O"),
+        ("P", "Q"),
+        ("R", "S"),
+        ("T", "U"),
+        ("V", "W"),
+        ("X", "Y"),
+    ]
+    for idx, (a, b) in enumerate(flyer_pairs):
+        if c == a or c == b:
+            return 100 + idx
+    # Default fallback
+    return 1000
 
 
 def gender(letter: str) -> str:
@@ -57,4 +76,3 @@ class Species:
     @property
     def gender(self) -> str:
         return gender(self.letter)
-

@@ -11,6 +11,8 @@ from .config import (
     ROCK_DROP_THRESHOLD,
     E_MEAL,
     ENERGY_MAX,
+    REPRO_ENERGY_THRESHOLD,
+    FLYER_MIN_ALTITUDE_REPRO,
 )
 from .species import Species, is_flyer_letter, pair_index, letter_order
 from .terrain import flat_terrain, generate_surface
@@ -75,13 +77,13 @@ class Simulation:
                 new_ix = int(round(new_x)) % self.width
                 new_gy = int(round(self.terrain[new_ix])) if self.terrain else self.height - 1
                 if is_flyer_letter(a.letter):
-                    # Preserve height above ground
+                    # Preserve height above surface
                     old_ix = int(round(a.x)) % max(1, old_w)
                     old_gy = int(round(old_terrain[old_ix])) if old_terrain else (old_h - 1)
-                    above = max(0, old_gy - int(round(a.y)))
+                    above = max(1, old_gy - int(round(a.y)))
                     new_y = max(0, new_gy - above)
                 else:
-                    new_y = new_gy
+                    new_y = max(0, new_gy - 1)
                 a.x = max(0.0, min(float(self.width - 1), new_x))
                 a.y = float(max(0, min(self.height - 1, new_y)))
 
@@ -109,13 +111,51 @@ class Simulation:
             x = rng.randrange(self.width)
             gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
             if is_flyer_letter(letter):
-                y = max(0, gy - rng.randint(2, 5))
+                y = max(0, gy - rng.randint(3, 6))
                 vx = rng.uniform(-0.5, 0.5)
                 vy = 0.0
             else:
-                y = gy
+                y = max(0, gy - 1)
                 vx = rng.uniform(-0.5, 0.5)
                 vy = 0.0
+            energy = rng.uniform(30.0, 80.0)
+            self.add(Automaton(letter=letter, x=float(x), y=float(y), energy=energy, vx=vx, vy=vy))
+
+    def seed_population_balanced(self, total: int = 100, *, seed: int | None = None) -> None:
+        """Seed at least `total` automata with ~50% flyers and ~50% landers.
+
+        Flyers are chosen from N..Z (including Z); landers from A..M.
+        Landers spawn at one cell above the surface; flyers spawn 3..6 above.
+        """
+        if self.width <= 0:
+            return
+        rng = random.Random(seed)
+        total = max(0, int(total))
+        flyers_target = total // 2
+        landers_target = total - flyers_target
+
+        flyer_letters = [
+            "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        ]
+        land_letters = [chr(ord('A') + i) for i in range(13)]  # A..M
+
+        for _ in range(landers_target):
+            letter = rng.choice(land_letters)
+            x = rng.randrange(self.width)
+            gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
+            y = max(0, gy - 1)
+            vx = rng.uniform(-0.5, 0.5)
+            vy = 0.0
+            energy = rng.uniform(30.0, 80.0)
+            self.add(Automaton(letter=letter, x=float(x), y=float(y), energy=energy, vx=vx, vy=vy))
+
+        for _ in range(flyers_target):
+            letter = rng.choice(flyer_letters)
+            x = rng.randrange(self.width)
+            gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
+            y = max(0, gy - rng.randint(3, 6))
+            vx = rng.uniform(-0.5, 0.5)
+            vy = 0.0
             energy = rng.uniform(30.0, 80.0)
             self.add(Automaton(letter=letter, x=float(x), y=float(y), energy=energy, vx=vx, vy=vy))
 
@@ -341,6 +381,9 @@ class Simulation:
             for i in indices:
                 a = self.automata[i]
                 if a.letter.upper() == "Z" and is_flyer_letter("Z") and a.energy > 90.0 and a.can_fly():
+                    # Flyers must be at altitude to reproduce
+                    if (self.ground_y_at(a.x) - a.y) < FLYER_MIN_ALTITUDE_REPRO:
+                        continue
                     # Spawn near parent (same x, above if free)
                     child = Automaton(letter="Z", x=a.x, y=max(0.0, a.y - 1.0), energy=50.0)
                     newborns.append(child)
@@ -358,10 +401,17 @@ class Simulation:
                             genders_different = ((ord(ai.letter.upper()) - ord("A")) % 2) != (
                                 (ord(aj.letter.upper()) - ord("A")) % 2
                             )
-                            if genders_different and ai.energy > 10.0 and aj.energy > 10.0:
-                                # Spawn child of same species pair, choose lower letter visually
-                                base_letter_ord = 2 * pair_index(ai.letter) + ord("A")
-                                child_letter = chr(base_letter_ord)
+                            # Both must desire reproduction
+                            if not (ai.energy >= REPRO_ENERGY_THRESHOLD and aj.energy >= REPRO_ENERGY_THRESHOLD):
+                                continue
+                            # Flyers can only reproduce at altitude
+                            ai_alt_ok = (not is_flyer_letter(ai.letter)) or ((self.ground_y_at(ai.x) - ai.y) >= FLYER_MIN_ALTITUDE_REPRO)
+                            aj_alt_ok = (not is_flyer_letter(aj.letter)) or ((self.ground_y_at(aj.x) - aj.y) >= FLYER_MIN_ALTITUDE_REPRO)
+                            if not (ai_alt_ok and aj_alt_ok):
+                                continue
+                            if genders_different:
+                                # Spawn child of same species pair, choose lexicographically lower parent letter
+                                child_letter = min(ai.letter.upper(), aj.letter.upper())
                                 newborns.append(
                                     Automaton(letter=child_letter, x=ai.x, y=ai.y, energy=50.0)
                                 )
