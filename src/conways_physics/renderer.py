@@ -78,6 +78,13 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
             if 0 <= x < w:
                 grid[y][x] = ch
 
+    # Overlay corpses as '#'
+    corpse_cells = set()
+    for (ry, cx) in getattr(sim, "corpses", set()):
+        if 0 <= cx < w and 0 <= ry < h:
+            grid[ry][cx] = "#"
+            corpse_cells.add((ry, cx))
+
     # Build Rich Text with color states
     lines: List[Text] = []
     for r in range(h):
@@ -86,7 +93,7 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
             ch = grid[r][c]
             style = None
             # Color based on automaton energy mapped to 0..15 palette,
-            # or grey for terrain where no automata present
+            # or grey for terrain/corpses where no automata present
             for a in sim.automata:
                 if not a.alive:
                     continue
@@ -94,7 +101,9 @@ def render_sim(sim: Simulation, width: int, height: int) -> Text:
                     style = _energy_style(a.energy)
                     break
             else:
-                if (r, c) in terrain_cells:
+                if (r, c) in corpse_cells:
+                    style = "grey70"
+                elif (r, c) in terrain_cells:
                     style = "grey50"
             row.append(ch, style=style)
         lines.append(row)

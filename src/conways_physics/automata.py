@@ -12,6 +12,8 @@ from .config import (
     GROUND_FRICTION,
     RESTITUTION,
     E_MEAL,
+    FLYER_MIN_ALTITUDE_REPRO,
+    FLYER_CLIMB_ACCEL,
 )
 from .species import is_flyer_letter
 from .utils import clamp
@@ -66,7 +68,12 @@ class Automaton:
                 self.vy = -3.0
             # Simple vertical dynamics with drag; horizontal conserved
             weight_factor = 1.0 + 0.5 * (self.energy / ENERGY_MAX)
-            self.vy += (GRAVITY * weight_factor) * dt
+            # Add climb bias if below preferred altitude relative to surface
+            altitude = max(0.0, ground_y - self.y)
+            climb = 0.0
+            if altitude < FLYER_MIN_ALTITUDE_REPRO:
+                climb = FLYER_CLIMB_ACCEL * (1.0 - (altitude / max(1e-6, FLYER_MIN_ALTITUDE_REPRO)))
+            self.vy += ((GRAVITY * weight_factor) - climb) * dt
             self.vy *= max(0.0, 1.0 - AIR_DRAG)
             self.y += self.vy * dt
             self.x += self.vx * dt
@@ -78,15 +85,22 @@ class Automaton:
             if abs(self.vx) > 1e-9 or abs(self.vy) > 1e-9:
                 self.energy = clamp(self.energy - (0.5 * dt), 0.0, ENERGY_MAX)
         else:
-            # On ground: stick to one-above-surface and apply friction
+            # On ground: flyers may rest but cannot translate along terrain; landers can walk
             self.y = ground_air
-            self.x += self.vx * dt
-            # Energy increases effective mass: heavier means more frictional slowdown
-            mass_factor = 1.0 - 0.5 * (self.energy / ENERGY_MAX)
-            self.vx *= max(0.0, 1.0 - (GROUND_FRICTION + 0.2 * (1.0 - mass_factor)))
-            # Walking cost only if moving horizontally
-            if abs(self.vx) > 1e-9:
-                self.energy = clamp(self.energy - (0.2 * dt), 0.0, ENERGY_MAX)
+            if is_flyer_letter(self.letter):
+                # immobilize along ground
+                self.vx = 0.0
+                # small passive drain
+                self.energy = clamp(self.energy - (0.1 * dt), 0.0, ENERGY_MAX)
+            else:
+                # landers walk with friction
+                self.x += self.vx * dt
+                # Energy increases effective mass: heavier means more frictional slowdown
+                mass_factor = 1.0 - 0.5 * (self.energy / ENERGY_MAX)
+                self.vx *= max(0.0, 1.0 - (GROUND_FRICTION + 0.2 * (1.0 - mass_factor)))
+                # Walking cost only if moving horizontally
+                if abs(self.vx) > 1e-9:
+                    self.energy = clamp(self.energy - (0.2 * dt), 0.0, ENERGY_MAX)
 
         # Wrap horizontally
         if width > 0:

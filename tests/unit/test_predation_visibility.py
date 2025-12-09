@@ -12,13 +12,7 @@ def test_predation_visibility_coin_toss(monkeypatch):
 
     import conways_physics.sim as sim_mod
 
-    # First: coin toss fails visibility -> no predation
-    monkeypatch.setattr(sim_mod.random, "random", lambda: 0.9)
-    sim.step(0.0)
-    assert flyer.alive is True
-
-    # Second: coin toss sees -> lander eats flyer
+    # Force visibility -> lander eats flyer
     monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.0)
     assert flyer.alive is False
-

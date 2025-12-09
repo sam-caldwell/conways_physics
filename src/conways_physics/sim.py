@@ -45,6 +45,7 @@ class Simulation:
     rocks: List[Rock] = field(default_factory=list)
     life_grid: List[List[int]] = field(default_factory=list)
     auto_rocks: bool = False
+    corpses: set[tuple[int, int]] = field(default_factory=set)
 
     def configure_surface_for_view(
         self,
@@ -111,7 +112,9 @@ class Simulation:
             x = rng.randrange(self.width)
             gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
             if is_flyer_letter(letter):
-                y = max(0, gy - rng.randint(3, 6))
+                # Spawn flyers closer to the top of the screen
+                top_cap = max(0, min(self.height // 3, gy - 3))
+                y = rng.randint(0, top_cap) if top_cap > 0 else 0
                 vx = rng.uniform(-0.5, 0.5)
                 vy = 0.0
             else:
@@ -153,7 +156,8 @@ class Simulation:
             letter = rng.choice(flyer_letters)
             x = rng.randrange(self.width)
             gy = int(round(self.terrain[x])) if self.terrain else self.height - 1
-            y = max(0, gy - rng.randint(3, 6))
+            top_cap = max(0, min(self.height // 3, gy - 3))
+            y = rng.randint(0, top_cap) if top_cap > 0 else 0
             vx = rng.uniform(-0.5, 0.5)
             vy = 0.0
             energy = rng.uniform(30.0, 80.0)
@@ -222,6 +226,9 @@ class Simulation:
                     elif cnt <= 2:
                         a.vx -= 0.2
 
+        # A/B species can consume corpses ('#') at their cell
+        self._consume_corpses()
+
         # Reproduction before predation to favor population growth
         self._resolve_reproduction()
 
@@ -247,6 +254,24 @@ class Simulation:
             self.life_grid = step_life(self.life_grid)
 
         # Cull dead automata list to keep things tidy (we retain entries but mark dead)
+
+    def _consume_corpses(self) -> None:
+        if not self.corpses:
+            return
+        to_remove = []
+        for a in self.automata:
+            if not a.alive:
+                continue
+            if a.letter.upper() not in ("A", "B"):
+                continue
+            xi = int(round(a.x)) % max(1, self.width)
+            yi = int(round(a.y))
+            if (yi, xi) in self.corpses:
+                to_remove.append((yi, xi))
+                a.eat_gain(1.0)
+                a.eat_flash = max(a.eat_flash, 2)
+        for pos in to_remove:
+            self.corpses.discard(pos)
 
     def _update_rocks(self, dt: float) -> None:
         for r in self.rocks:
@@ -424,7 +449,11 @@ class Simulation:
     # Surface absorption helpers
     def _bury(self, a: Automaton) -> None:
         a.kill()
-        self._bury_at_x(int(round(a.x)))
+        if self.width > 0:
+            xi = int(round(a.x)) % self.width
+            yi = int(round(self.ground_y_at(a.x))) - 1
+            yi = max(0, min(self.height - 1, yi))
+            self.corpses.add((yi, xi))
 
     def _bury_at_x(self, x: int) -> None:
         if self.width <= 0:

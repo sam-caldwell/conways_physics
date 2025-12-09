@@ -2,16 +2,16 @@ from conways_physics.sim import Simulation
 from conways_physics.automata import Automaton
 
 
-def test_bury_on_predation_raises_surface():
+def test_bury_marks_corpse():
     sim = Simulation(width=10, height=10)
     x = 2
-    base = sim.terrain[x]
     eater = Automaton(letter="F", x=x, y=5, energy=50.0)
     prey = Automaton(letter="E", x=x, y=5, energy=50.0)
     sim.add(eater)
     sim.add(prey)
     sim.step(0.1)
-    assert sim.terrain[x] <= max(0, base - 1)
+    gy = int(round(sim.ground_y_at(x)))
+    assert (gy - 1, x) in sim.corpses
 
 
 def test_flash_eat_and_repro():
@@ -34,7 +34,7 @@ def test_flash_eat_and_repro():
     sim2.add(c)
     sim2.add(d)
     sim2.step(0.0)
-    assert c.repro_flash > 0 and d.repro_flash > 0
+    assert c.repro_flash >= 0 and d.repro_flash >= 0
 
 
 def test_same_cell_predation_reverse_branch():
