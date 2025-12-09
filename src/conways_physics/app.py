@@ -104,6 +104,8 @@ class ConwaysPhysics(App):
     _status_timer = None
     _accum: float = 0.0
     _base_tick: float = 0.05  # 20 Hz timer; we gate sim cycles by speed_cps
+    gameplay: GameplayPanel = None
+    status: StatusPanel = None
 
     def compose(self) -> ComposeResult:
         """Construct the layout and initialize the simulation."""

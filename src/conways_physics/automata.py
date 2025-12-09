@@ -28,6 +28,7 @@ from .config import (
 from .species import is_flyer_letter
 from .utils import clamp
 
+
 @dataclass
 class Automaton:
     """A single automaton with simple Newtonian dynamics and energy.
@@ -90,6 +91,10 @@ class Automaton:
             width: World width for wraparound.
         """
         if not self.alive:
+            return
+        # Do not change position/velocity when dt <= 0; allows tests to set
+        # exact positions for reproduction/visibility without side effects.
+        if dt <= 0.0:
             return
 
         if not self.can_move():

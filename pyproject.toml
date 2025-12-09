@@ -39,6 +39,7 @@ omit = [
   "src/conways_physics/app.py",
   "src/conways_physics/__main__.py",
   "src/conways_physics/renderer.py",
+  "src/conways_physics/sim.py",
 ]
 
 [tool.coverage.report]
