@@ -50,3 +50,13 @@ LANDER_JUMP_COOLDOWN_DAYS: float = 7.0
 LANDER_JUMP_ASCENT_MAX_CELLS: int = 3
 LANDER_JUMP_DISTANCE_CELLS: int = 2
 LANDER_JUMP_CHANCE: float = 0.5  # probability to attempt a jump when eligible
+
+# Stagnation forcing: if an automaton stays in the same cell, gradually
+# increase the chance of applying a small nudge to encourage movement.
+STAGNATION_FORCE_START_S: float = 5.0    # no forcing before this many seconds
+STAGNATION_FORCE_FULL_S: float = 60.0    # at/after this, forcing chance ~100%
+
+# Predation appetite modulation: high-energy predators are less likely to eat.
+# Above this energy, reduce eat probability linearly toward the minimum.
+EAT_DAMP_START_ENERGY: float = 90.0
+EAT_DAMP_MIN_PROB: float = 0.3

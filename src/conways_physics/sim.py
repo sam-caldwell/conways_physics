@@ -27,6 +27,10 @@ from .config import (
     LANDER_JUMP_DISTANCE_CELLS,
     LANDER_JUMP_CHANCE,
     ROCK_DECAY_SECONDS,
+    STAGNATION_FORCE_START_S,
+    STAGNATION_FORCE_FULL_S,
+    EAT_DAMP_START_ENERGY,
+    EAT_DAMP_MIN_PROB,
 )
 from .species import is_flyer_letter, pair_index, relative_rank
 from .terrain import flat_terrain, generate_surface
@@ -102,6 +106,7 @@ class Simulation:
     eaten_total: int = 0
     rock_deaths_total: int = 0
     starved_total: int = 0
+    reproductions_total: int = 0
     # Movement tracking
     moves_total: int = 0
     moves_today: int = 0
@@ -728,6 +733,39 @@ class Simulation:
                 ):
                     a.energy = clamp(a.energy - (0.1 * max(0.0, dt)), 0.0, ENERGY_MAX)
 
+        # Stagnation forcing: the longer an automaton stays in the same cell,
+        # the higher the chance we apply a small nudge to its velocity to break
+        # out of stagnation on subsequent steps.
+        if dt > 0.0 and self.width > 0:
+            for a in self.automata:
+                if not a.alive:
+                    continue
+                moved = id(a) in moved_ids
+                if moved:
+                    a.stagnant_s = 0.0
+                    continue
+                # Only consider if still in the same integer cell
+                a.stagnant_s += max(0.0, dt)
+                if a.stagnant_s < STAGNATION_FORCE_START_S:
+                    continue
+                # Compute probability rising linearly from start->full
+                span = max(1e-6, STAGNATION_FORCE_FULL_S - STAGNATION_FORCE_START_S)
+                p = min(0.95, max(0.0, (a.stagnant_s - STAGNATION_FORCE_START_S) / span))
+                if random.random() < p:
+                    # Apply a modest horizontal nudge without overriding strong motion
+                    if not is_flyer_letter(a.letter):
+                        if abs(a.vx) < 0.8:
+                            a.vx = 1.5 if random.random() < 0.5 else -1.5
+                    else:
+                        # Flyers: prefer horizontal nudge if flying; otherwise try a light upward bias
+                        if a.can_fly():
+                            if abs(a.vx) < 1.0:
+                                a.vx = 1.5 if random.random() < 0.5 else -1.5
+                        else:
+                            # Encourage takeoff next step by priming vy upwards slightly
+                            if abs(a.vy) < 0.5:
+                                a.vy = -1.0
+
         # A/B species can consume corpses ('#') at their cell
         self._consume_corpses()
 
@@ -899,11 +937,16 @@ class Simulation:
                         continue
                     if self._can_eat(ai, aj, same_cell=True, vertical_relation=0):
                         if not self._ab_retaliation(ai, aj):
+                            # Move attacker to prey position, then bury prey
+                            px, py = aj.x, aj.y
                             self._bury(aj, cause="eaten")
+                            ai.x, ai.y = px, py
                             ai.eat_gain(1.0)
                     elif self._can_eat(aj, ai, same_cell=True, vertical_relation=0):
                         if not self._ab_retaliation(aj, ai):
+                            px, py = ai.x, ai.y
                             self._bury(ai, cause="eaten")
+                            aj.x, aj.y = px, py
                             aj.eat_gain(1.0)
 
         # Flyers attack landers from above; landers can eat flyers above/left/right
@@ -934,7 +977,9 @@ class Simulation:
                         vertical = -1 if (ay > int(round(prey.y))) else (1 if (ay < int(round(prey.y))) else 0)
                         if self._can_eat(attacker, prey, same_cell=False, vertical_relation=vertical):
                             if not self._ab_retaliation(attacker, prey):
+                                px, py = prey.x, prey.y
                                 self._bury(prey, cause="eaten")
+                                attacker.x, attacker.y = px, py
                                 attacker.eat_gain(1.0)
 
     def _resolve_predation_same_cell_only(self) -> None:
@@ -963,11 +1008,15 @@ class Simulation:
                         continue
                     if self._can_eat(ai, aj, same_cell=True, vertical_relation=0):
                         if not self._ab_retaliation(ai, aj):
+                            px, py = aj.x, aj.y
                             self._bury(aj, cause="eaten")
+                            ai.x, ai.y = px, py
                             ai.eat_gain(1.0)
                     elif self._can_eat(aj, ai, same_cell=True, vertical_relation=0):
                         if not self._ab_retaliation(aj, ai):
+                            px, py = ai.x, ai.y
                             self._bury(ai, cause="eaten")
+                            aj.x, aj.y = px, py
                             aj.eat_gain(1.0)
 
     def _can_eat(self, attacker: Automaton, prey: Automaton, *, same_cell: bool, vertical_relation: int) -> bool:
@@ -983,6 +1032,12 @@ class Simulation:
         ra = relative_rank(attacker.letter)
         rp = relative_rank(prey.letter)
         if ra > rp:
+            # High-energy predators have reduced appetite: damp eat chance
+            if attacker.energy >= EAT_DAMP_START_ENERGY:
+                span = max(1e-6, ENERGY_MAX - EAT_DAMP_START_ENERGY)
+                frac = min(1.0, max(0.0, (attacker.energy - EAT_DAMP_START_ENERGY) / span))
+                p = 1.0 - frac * (1.0 - EAT_DAMP_MIN_PROB)
+                return random.random() < p
             return True
         if ra == rp:
             return random.random() < 0.5
@@ -1026,6 +1081,7 @@ class Simulation:
                     # Spawn near parent (same x, above if free)
                     child = Automaton(letter="Z", x=a.x, y=max(0.0, a.y - 1.0), energy=50.0)
                     newborns.append(child)
+                    self.reproductions_total += 1
                     a.repro_step = True
 
             # Pair reproduction: look for opposite genders in same species pair
@@ -1058,6 +1114,7 @@ class Simulation:
                                 newborns.append(
                                     Automaton(letter=child_letter, x=ai.x, y=ai.y, energy=50.0)
                                 )
+                                self.reproductions_total += 1
                                 # Reset A/B since-reproduction timers on successful reproduction
                                 if ai.letter.upper() in ("A", "B"):
                                     ai.since_repro_s = 0.0
@@ -1309,6 +1366,7 @@ class Simulation:
                         # Mark parents as having reproduced this step to prevent immediate predation
                         a.repro_step = True
                         b.repro_step = True
+                        self.reproductions_total += 1
             # next key
         for nb in newborns:
             self.add(nb)

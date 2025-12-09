@@ -9,13 +9,15 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.widgets import Static, Footer
+from textual.widgets import Static, Footer, Input, Label, Button
 from textual.reactive import reactive
 from textual import events
+from textual.screen import ModalScreen
 
 from .sim import Simulation
 from .config import DEFAULT_WIDTH, DEFAULT_HEIGHT, DAY_LENGTH_S
 from .renderer import render_sim
+import random
 
 
 class GameplayPanel(Static):
@@ -42,7 +44,12 @@ class GameplayPanel(Static):
 
 class StatusPanel(Static):
     """Footer panel displaying summary details and timing."""
-    text = reactive("")
+    text = reactive("initializing...please wait!")
+
+    def __init__(self) -> None:
+        super().__init__("")
+        # Show an initialization message until the first status update
+        self.update(self.text)
 
     def update_status(
         self,
@@ -54,6 +61,7 @@ class StatusPanel(Static):
         runtime_s: float,
         avg_energy: float,
         spawned: int,
+        reproductions: int,
         died: int,
         eaten: int,
         rocks: int,
@@ -62,20 +70,93 @@ class StatusPanel(Static):
         ma3: float,
         ma7: float,
         ma14: float,
+        paused: bool = False,
     ) -> None:
         """Update the displayed status string."""
         hh = int(runtime_s // 3600)
         mm = int((runtime_s % 3600) // 60)
         ss = int(runtime_s % 60)
         day_str = "Day" if is_day else "Night"
+        paused_str = "  [Paused]" if paused else ""
         self.text = (
-            f"N={N}  speed={speed:.1f}/s  {day_str}  days={days}  "
-            f"avgE={avg_energy:.1f}  spawned={spawned}  died={died}  "
+            f"N={N}  speed={speed:.1f}/s{paused_str}  {day_str}  days={days}  "
+            f"avgE={avg_energy:.1f}  spawned={spawned}  repro={reproductions}  died={died}  "
             f"eaten={eaten}  rocks={rocks}  starved={starved}  "
             f"moves={moves_total}  ma3={ma3:.0f}  ma7={ma7:.0f}  ma14={ma14:.0f}  "
             f"run={hh:02d}:{mm:02d}:{ss:02d}"
         )
         self.update(self.text)
+
+
+class SpawnRangeDialog(ModalScreen[tuple[int, int] | None]):
+    """Modal screen to set min/max spawn counts for new worlds."""
+
+    def __init__(self, current: tuple[int | None, int | None] = (None, None)) -> None:
+        super().__init__()
+        self._current = current
+        self._min_input: Input | None = None
+        self._max_input: Input | None = None
+
+    def compose(self) -> ComposeResult:  # type: ignore[override]
+        # Build a simple vertical form with two inputs and buttons
+        min_val = "" if self._current[0] is None else str(self._current[0])
+        max_val = "" if self._current[1] is None else str(self._current[1])
+        yield Vertical(
+            Static("Set spawn count range (inclusive). Leave blank to cancel.", id="spawn-help"),
+            Vertical(
+                Label("Minimum:"),
+                Input(placeholder="e.g. 80", value=min_val, id="spawn-min"),
+                Label("Maximum:"),
+                Input(placeholder="e.g. 140", value=max_val, id="spawn-max"),
+                id="spawn-form",
+            ),
+            Vertical(
+                Button("OK", id="ok"),
+                Button("Cancel", id="cancel"),
+                id="spawn-buttons",
+            ),
+            id="spawn-dialog",
+        )
+
+    def on_mount(self) -> None:
+        # Focus the first input
+        try:
+            self._min_input = self.query_one("#spawn-min", Input)
+            self._max_input = self.query_one("#spawn-max", Input)
+            self._min_input.focus()
+        except Exception:
+            pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
+        btn_id = event.button.id
+        if btn_id == "cancel":
+            self.dismiss(None)
+            return
+        if btn_id == "ok":
+            self._submit()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:  # type: ignore[override]
+        # Pressing Enter in an input submits the form
+        self._submit()
+
+    def _submit(self) -> None:
+        # Parse inputs; dismiss None if blanks
+        try:
+            min_text = self._min_input.value.strip() if self._min_input else ""
+            max_text = self._max_input.value.strip() if self._max_input else ""
+            if not min_text or not max_text:
+                self.dismiss(None)
+                return
+            lo = int(min_text)
+            hi = int(max_text)
+            if lo < 1:
+                lo = 1
+            if hi < lo:
+                hi = lo
+            self.dismiss((lo, hi))
+        except Exception:
+            # On parse error, cancel to avoid trapping the user
+            self.dismiss(None)
 
 
 class ConwaysPhysics(App):
@@ -92,10 +173,11 @@ class ConwaysPhysics(App):
         ("-", "speed_down", "Decrease speed"),
         ("p", "pause", "Pause"),
         ("s", "resume", "Resume"),
+        ("n", "set_spawn_range", "Spawn range"),
         ("r", "recycle", "Recycle"),
         ("q", "quit", "Quit"),
     ]
-    running: bool = True
+    running: bool = False
     speed_cps: float = 30.0
     runtime_s: float = 0.0
     days: int = 0  # maintained for backwards-compat; display derives from t_abs
@@ -106,6 +188,9 @@ class ConwaysPhysics(App):
     _base_tick: float = 0.05  # 20 Hz timer; we gate sim cycles by speed_cps
     gameplay: GameplayPanel = None
     status: StatusPanel = None
+    # Optional spawn range for new worlds (inclusive). If None, count is randomized.
+    spawn_min: int | None = None
+    spawn_max: int | None = None
 
     def compose(self) -> ComposeResult:
         """Construct the layout and initialize the simulation."""
@@ -125,8 +210,8 @@ class ConwaysPhysics(App):
         w = max(1, self.gameplay.size.width or DEFAULT_WIDTH)
         h = max(1, self.gameplay.size.height or DEFAULT_HEIGHT)
         self.sim.configure_surface_for_view(w, h, sea_level_offset=4, amplitude=3)
-        # Seed initial population: at least 100 automata, ~50% flyers/landers
-        self.sim.seed_population_balanced(100)
+        # Seed initial population with randomized count unless spawn range set
+        self.sim.seed_population_balanced(self._choose_spawn_total())
         # Main simulation timer
         self._sim_timer = self.set_interval(self._base_tick, self._tick_sim)
         # Status refresh timer
@@ -160,15 +245,49 @@ class ConwaysPhysics(App):
         new_sim = Simulation(width=w, height=h)
         new_sim.auto_rocks = True
         new_sim.configure_surface_for_view(w, h, sea_level_offset=4, amplitude=3)
-        new_sim.seed_population_balanced(100)
+        new_sim.seed_population_balanced(self._choose_spawn_total())
         # Swap in new simulation and reset runtime counters
         self.sim = new_sim
         self.gameplay.sim = new_sim
         self.runtime_s = 0.0
         self.days = 0
         self._accum = 0.0
+        # Pause after recycle so the new world starts stationary
+        self.running = False
         # Trigger immediate repaint
         self.gameplay.refresh()
+
+    def _choose_spawn_total(self) -> int:
+        """Choose a spawn total using configured range or a default randomized range.
+
+        If `spawn_min/max` are set, returns a random int within the inclusive
+        range. Otherwise, returns a randomized default count based on viewport
+        with a broad default range suitable for diverse scenes.
+        """
+        # Use configured inclusive range if present
+        if self.spawn_min is not None and self.spawn_max is not None:
+            lo = max(1, int(self.spawn_min))
+            hi = max(lo, int(self.spawn_max))
+            return random.randint(lo, hi)
+        # Default randomized selection within 50..800 inclusive
+        return random.randint(50, 800)
+
+    def action_set_spawn_range(self) -> None:
+        """Open a modal to set min/max spawn counts for new worlds."""
+        self.push_screen(
+            SpawnRangeDialog(current=(self.spawn_min, self.spawn_max)),
+            self._on_spawn_range_set,
+        )
+
+    def _on_spawn_range_set(self, result: tuple[int, int] | None) -> None:
+        """Callback when the spawn range dialog closes."""
+        if result is None:
+            return
+        lo, hi = result
+        lo = max(1, int(lo))
+        hi = max(lo, int(hi))
+        self.spawn_min = lo
+        self.spawn_max = hi
 
     def _tick_sim(self) -> None:
         """Timer callback to advance simulation time appropriately."""
@@ -205,6 +324,7 @@ class ConwaysPhysics(App):
             runtime_s=self.runtime_s,
             avg_energy=avg_energy,
             spawned=self.sim.spawned_total,
+            reproductions=self.sim.reproductions_total,
             died=self.sim.died_total,
             eaten=self.sim.eaten_total,
             rocks=self.sim.rock_deaths_total,
@@ -213,6 +333,7 @@ class ConwaysPhysics(App):
             ma3=ma3,
             ma7=ma7,
             ma14=ma14,
+            paused=not self.running,
         )
 
     def on_resize(self, event: events.Resize) -> None:  # type: ignore[override]

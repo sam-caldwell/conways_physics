@@ -18,6 +18,7 @@ def test_tick_motion_early_return_when_dead():
 def test_flyer_bounce_and_energy_cost_when_moving():
     # Place a flyer just above ground moving downward
     a = Automaton(letter="N", x=0, y=4.9, energy=50.0, vy=1.0)
+    a.weight = 20.0  # light to make behavior predictable
     a.tick_motion(0.2, ground_y=5.0, width=10)
     # Should not be below ground and velocity should invert sign (bounce)
     assert a.y <= 5.0
@@ -31,6 +32,7 @@ def test_flyer_prefers_flight_when_possible():
     # Flyer at ground with sufficient energy should lift off
     ground_y = 5.0
     a = Automaton(letter="N", x=0.0, y=ground_y, energy=50.0, vx=0.0, vy=0.0)
+    a.weight = 20.0
     a.tick_motion(0.1, ground_y=ground_y, width=10)
     assert a.y < ground_y  # moved upward (smaller y)
     # vy may become positive after bounce; ensure it lifted off
@@ -78,3 +80,6 @@ def test_lander_eats_adjacent_flyer_left(monkeypatch):
     monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.1)
     assert flyer.alive is False
+    # Lander moves into flyer's column; landers rest on the air boundary (surface−1)
+    assert int(round(lander.x)) == 4
+    assert int(round(lander.y)) == int(round(sim.ground_y_at(lander.x))) - 1
