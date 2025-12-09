@@ -38,13 +38,20 @@ COLOR_TABLE = [
 
 
 def _energy_style(energy: float) -> str:
-    """Map energy [0, 100] to a 16-color style name."""
+    """Map energy [1..100] to a 0..15 color index, clamped.
+
+    - Energies <=1 map to index 0; 100 maps to 15.
+    - Energies outside [0,100] are clamped before mapping.
+    """
     e = 0.0 if energy is None else float(energy)
     if e < 0.0:
         e = 0.0
     if e > 100.0:
         e = 100.0
-    idx = int(round((e / 100.0) * 15.0))
+    # Treat the visible scale as 1..100 so that 100 -> 15 exactly
+    e1 = max(1.0, e)
+    ratio = (e1 - 1.0) / 99.0  # 0.0 at 1, 1.0 at 100
+    idx = int(ratio * 15.0)
     idx = max(0, min(15, idx))
     return COLOR_TABLE[idx]
 

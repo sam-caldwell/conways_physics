@@ -11,7 +11,8 @@ on classes and methods.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import random
 
 from .config import (
     ENERGY_MAX,
@@ -50,6 +51,9 @@ class Automaton:
     since_repro_s: float = 0.0  # time since last successful reproduction (A/B auto-spawn rule)
     ate_step: bool = False  # set True when eat_gain is called within a step
     repro_step: bool = False  # set True when reproduction occurs within a step
+    stagnant_s: float = 0.0  # accumulated time spent in the same integer cell
+    # Randomized body weight in [20..100]; reserved for physics tuning
+    weight: float = field(default_factory=lambda: float(random.randint(20, 100)))
 
     def can_move(self) -> bool:
         """Return True if the automaton has enough energy to move."""
@@ -108,7 +112,9 @@ class Automaton:
             if self.y >= ground_air - 1e-6 and self.vy >= 0.0:
                 self.vy = -3.0
             # Simple vertical dynamics with drag; horizontal conserved
-            weight_factor = 1.0 + 0.5 * (self.energy / ENERGY_MAX)
+            # Incorporate weight conservatively: heavier bodies increase effective gravity slightly.
+            w_norm = max(0.0, min(1.0, (self.weight - 20.0) / 80.0))
+            weight_factor = 1.0 + 0.5 * (self.energy / ENERGY_MAX) + 0.2 * w_norm
             # Add climb bias if below preferred altitude relative to surface
             altitude = max(0.0, ground_y - self.y)
             climb = 0.0
@@ -136,9 +142,11 @@ class Automaton:
             else:
                 # landers walk with friction
                 self.x += self.vx * dt
-                # Energy increases effective mass: heavier means more frictional slowdown
-                mass_factor = 1.0 - 0.5 * (self.energy / ENERGY_MAX)
-                self.vx *= max(0.0, 1.0 - (GROUND_FRICTION + 0.2 * (1.0 - mass_factor)))
+                # Friction scaling: slightly higher with more energy and more weight
+                e_term = 0.1 * (self.energy / ENERGY_MAX)
+                w_norm = max(0.0, min(1.0, (self.weight - 20.0) / 80.0))
+                w_term = 0.03 * w_norm
+                self.vx *= max(0.0, 1.0 - (GROUND_FRICTION + e_term + w_term))
                 # Walking cost only if moving horizontally
                 if abs(self.vx) > 1e-9:
                     self.energy = clamp(self.energy - (0.2 * dt), 0.0, ENERGY_MAX)

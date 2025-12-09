@@ -16,3 +16,6 @@ def test_predation_visibility_coin_toss(monkeypatch):
     monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.0)
     assert flyer.alive is False
+    # Attacker moves to prey's exact position for dt==0 interactions
+    assert int(round(lander.x)) == 7
+    assert int(round(lander.y)) == int(round(flyer.y))
