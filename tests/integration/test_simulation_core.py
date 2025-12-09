@@ -34,13 +34,16 @@ def test_predation_land_same_cell_order_and_cannibal_only_when_starved():
     assert same_species.alive is False
 
 
-def test_flyer_attacks_lander_from_above_and_lander_eats_adjacent_flyer():
+def test_flyer_attacks_lander_from_above_and_lander_eats_adjacent_flyer(monkeypatch):
     sim = Simulation(width=10, height=10)
     flyer = Automaton(letter="N", x=5, y=3, energy=50.0)
     lander = Automaton(letter="A", x=5, y=5, energy=50.0)
     sim.add(flyer)
     sim.add(lander)
-    sim.step(0.1)
+    # ensure visibility at distance 2
+    import conways_physics.sim as sim_mod
+    monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
+    sim.step(0.0)
     # Flyer is above lander at start, should attack
     assert lander.alive is False
 
@@ -50,7 +53,7 @@ def test_flyer_attacks_lander_from_above_and_lander_eats_adjacent_flyer():
     flyer = Automaton(letter="N", x=5, y=4, energy=50.0)
     sim.add(lander)
     sim.add(flyer)
-    sim.step(0.1)
+    sim.step(0.0)
     assert flyer.alive is False
 
 
@@ -59,7 +62,7 @@ def test_z_asexual_reproduction_when_flying_and_energetic():
     z = Automaton(letter="Z", x=5, y=3, energy=95.0)
     sim.add(z)
     # Ensure Z can fly (energy > 20)
-    sim.step(0.1)
+    sim.step(0.0)
     # Newborn Z should be added
     assert any(a is not z and a.letter == "Z" for a in sim.automata)
 
@@ -121,5 +124,5 @@ def test_flyer_distance_attack_within_two_cells(monkeypatch):
     # Patch the sim module's RNG to ensure visibility at distance=2
     import conways_physics.sim as sim_mod
     monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
-    sim.step(0.1)
+    sim.step(0.0)
     assert lander.alive is False
