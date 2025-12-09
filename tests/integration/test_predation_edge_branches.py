@@ -11,4 +11,3 @@ def test_predation_skips_dead_in_build_and_scan():
     # Should not raise and should skip dead entries in maps and scans
     sim.step(0.1)
     assert alive.alive is True and dead.alive is False
-

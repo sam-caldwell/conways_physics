@@ -1,6 +1,5 @@
 from conways_physics.sim import Simulation
 from conways_physics.automata import Automaton
-from conways_physics.species import is_flyer_letter
 
 
 def test_configure_surface_rescales_automata_positions():

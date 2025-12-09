@@ -15,7 +15,13 @@ def flat_terrain(width: int, height: int, margin_from_bottom: int = 5) -> List[i
     return [baseline for _ in range(max(0, width))]
 
 
-def generate_random_terrain(width: int, height: int, low_margin: int = 3, high_margin: int = 6, seed: int | None = None) -> List[int]:
+def generate_random_terrain(
+    width: int,
+    height: int,
+    low_margin: int = 3,
+    high_margin: int = 6,
+    seed: int | None = None,
+) -> List[int]:
     """Generate a simple random-walk terrain with the surface 3–6 rows above bottom.
 
     Returns a list of y positions representing the top surface per column.

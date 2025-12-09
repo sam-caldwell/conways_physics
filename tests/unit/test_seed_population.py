@@ -1,5 +1,5 @@
 from conways_physics.sim import Simulation
-from conways_physics.species import is_flyer_letter, is_lander_letter
+from conways_physics.species import is_lander_letter
 
 
 def test_seed_population_spawns_expected_number_and_positions():

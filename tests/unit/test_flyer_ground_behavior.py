@@ -10,4 +10,3 @@ def test_flyer_grounded_cannot_translate():
     assert f.vx == 0.0
     # x should not change when immobilized
     assert f.x == 5.0
-

@@ -20,4 +20,3 @@ def test_flyer_pair_reproduction_requires_altitude():
     o.y = float(max(0, gy - 25))
     sim.step(0.0)
     assert any(a.letter in ("N", "O") and a is not n and a is not o for a in sim.automata)
-

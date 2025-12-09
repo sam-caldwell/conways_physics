@@ -66,6 +66,20 @@ def letter_order(letter: str) -> int:
     return ord(letter.upper())
 
 
+def relative_rank(letter: str) -> int:
+    """Return a 0..12 rank aligning landers (A..M) and flyers (N..Z).
+
+    A and N share rank 0; M and Z share rank 12. Intermediate letters align
+    accordingly: B/O->1, C/P->2, ..., L/Y->11.
+    """
+    c = letter.upper()
+    if "A" <= c <= "M":
+        return ord(c) - ord("A")
+    if "N" <= c <= "Z":
+        return ord(c) - ord("N")
+    return 0
+
+
 @dataclass(frozen=True)
 class Species:
     """Metadata wrapper for a species letter with convenience properties."""

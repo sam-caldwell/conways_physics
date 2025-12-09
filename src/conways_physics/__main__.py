@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from .app import ConwaysApp
+from .app import ConwaysPhysics
 
 
 def main() -> None:
     """Run the Textual application."""
-    ConwaysApp().run()
+    ConwaysPhysics().run()
 
 
 if __name__ == "__main__":

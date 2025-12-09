@@ -13,7 +13,7 @@ def test_ab_sunlight_gain_during_day():
     assert a.energy >= 10.0 + per_sec - 1e-6
 
 
-def test_predation_land_same_cell_order_and_cannibal_only_when_starved():
+def test_predation_relative_rank_and_equal_coin_toss(monkeypatch):
     sim = Simulation(width=10, height=10)
     # Higher letter eats lower letter in same cell
     attacker = Automaton(letter="D", x=1, y=5, energy=50.0)
@@ -24,17 +24,20 @@ def test_predation_land_same_cell_order_and_cannibal_only_when_starved():
     assert prey.alive is False
     assert attacker.energy > 50.0
 
-    # Cannibalism only if starved (<=10)
+    # Equal-rank coin toss: A vs N
     sim = Simulation(width=10, height=10)
-    eater = Automaton(letter="C", x=2, y=5, energy=10.0)
-    same_species = Automaton(letter="D", x=2, y=5, energy=50.0)
-    sim.add(eater)
-    sim.add(same_species)
+    a = Automaton(letter="A", x=2, y=5, energy=50.0)
+    n = Automaton(letter="N", x=2, y=5, energy=50.0)
+    sim.add(a)
+    sim.add(n)
+    import conways_physics.sim as sim_mod
+    monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.0)
-    assert same_species.alive is False
+    # Exactly one should die on coin toss
+    assert (a.alive is False) ^ (n.alive is False)
 
 
-def test_flyer_attacks_lander_from_above_and_lander_eats_adjacent_flyer(monkeypatch):
+def test_equal_tier_coin_toss_between_flyer_and_lander(monkeypatch):
     sim = Simulation(width=10, height=10)
     flyer = Automaton(letter="N", x=5, y=3, energy=50.0)
     lander = Automaton(letter="A", x=5, y=5, energy=50.0)
@@ -44,10 +47,10 @@ def test_flyer_attacks_lander_from_above_and_lander_eats_adjacent_flyer(monkeypa
     import conways_physics.sim as sim_mod
     monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.0)
-    # Flyer is above lander at start, should attack
+    # Equal rank; coin toss favors attacker (flyer) with our patch
     assert lander.alive is False
 
-    # Landers can eat adjacent flyers above/left/right
+    # Landers can also win coin toss when adjacent
     sim = Simulation(width=10, height=10)
     lander = Automaton(letter="A", x=5, y=5, energy=50.0)
     flyer = Automaton(letter="N", x=5, y=3, energy=50.0)
@@ -115,13 +118,14 @@ def test_movement_gating_and_world_wrap():
     assert 0 <= fast.x < sim.width
 
 
-def test_flyer_distance_attack_within_two_cells(monkeypatch):
+def test_equal_tier_distance_two_coin_toss(monkeypatch):
     sim = Simulation(width=10, height=10)
     # Landers can eat flyers within two cells horizontally (left/right)
     lander = Automaton(letter="A", x=5, y=5, energy=50.0)
     flyer = Automaton(letter="N", x=7, y=5, energy=50.0)
-    sim.add(flyer)
+    # Add lander first so it acts as attacker in the scan order
     sim.add(lander)
+    sim.add(flyer)
     # ensure detection at distance 2 passes the coin toss
     # Patch the sim module's RNG to ensure visibility at distance=2
     import conways_physics.sim as sim_mod

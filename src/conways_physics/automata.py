@@ -11,8 +11,7 @@ on classes and methods.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Tuple
+from dataclasses import dataclass
 
 from .config import (
     ENERGY_MAX,
@@ -45,8 +44,12 @@ class Automaton:
     vx: float = 0.0
     vy: float = 0.0
     alive: bool = True
-    eat_flash: int = 0  # red for 2 cycles after eating
-    repro_flash: int = 0  # green for 1 cycle before/after reproduction
+    age_s: float = 0.0  # accumulated lifetime in seconds
+    transforms_done: int = 0  # number of 30-day transformations applied (landers only)
+    last_jump_time_s: float = -1e18  # last absolute time a lander jump was used
+    since_repro_s: float = 0.0  # time since last successful reproduction (A/B auto-spawn rule)
+    ate_step: bool = False  # set True when eat_gain is called within a step
+    repro_step: bool = False  # set True when reproduction occurs within a step
 
     def can_move(self) -> bool:
         """Return True if the automaton has enough energy to move."""
@@ -68,14 +71,12 @@ class Automaton:
         self.energy = clamp(self.energy + per_second * dt, 0.0, ENERGY_MAX)
 
     def eat_gain(self, meals: float = 1.0) -> None:
-        """Increase energy as if the automaton consumed ``meals`` meals.
-
-        Also triggers a brief eat flash for visual feedback.
-        """
+        """Increase energy as if the automaton consumed ``meals`` meals."""
         if not self.alive:
             return
         self.energy = clamp(self.energy + meals * E_MEAL, 0.0, ENERGY_MAX)
-        self.eat_flash = max(self.eat_flash, 2)
+        # mark this step as having eaten (used for idle drain logic)
+        self.ate_step = True
 
     def kill(self) -> None:
         """Mark the automaton as no longer alive."""
@@ -150,12 +151,7 @@ class Automaton:
         """Return True if energy is below the move threshold."""
         return self.energy < ENERGY_MIN_MOVE
 
-    def tick_flashes(self) -> None:
-        """Decay any transient visual flash counters by one step."""
-        if self.eat_flash > 0:
-            self.eat_flash -= 1
-        if self.repro_flash > 0:
-            self.repro_flash -= 1
+    
 
 
 @dataclass

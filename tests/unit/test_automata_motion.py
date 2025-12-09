@@ -65,7 +65,7 @@ def test_starving_property():
     assert a.starving is False
 
 
-def test_lander_eats_adjacent_flyer_left():
+def test_lander_eats_adjacent_flyer_left(monkeypatch):
     from conways_physics.sim import Simulation
 
     sim = Simulation(width=10, height=10)
@@ -73,5 +73,8 @@ def test_lander_eats_adjacent_flyer_left():
     flyer = Automaton(letter="N", x=4, y=5, energy=50.0)
     sim.add(lander)
     sim.add(flyer)
+    # Force coin toss success for equal-rank attack
+    import conways_physics.sim as sim_mod
+    monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.1)
     assert flyer.alive is False

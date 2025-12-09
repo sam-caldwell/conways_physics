@@ -14,7 +14,7 @@ def test_bury_marks_corpse():
     assert (gy - 1, x) in sim.corpses
 
 
-def test_flash_eat_and_repro():
+def test_eat_and_repro_energy_changes():
     sim = Simulation(width=10, height=10)
     a = Automaton(letter="A", x=1, y=5, energy=50.0)
     b = Automaton(letter="B", x=1, y=5, energy=50.0)
@@ -24,17 +24,18 @@ def test_flash_eat_and_repro():
     low = Automaton(letter="A", x=1, y=5, energy=5.0)
     sim.add(low)
     sim.step(0.1)
-    # One of a/b should have flashed for eat
-    assert (a.eat_flash > 0) or (b.eat_flash > 0)
+    # One of a/b should have eaten and gained energy
+    assert (a.energy > 50.0) or (b.energy > 50.0)
 
-    # Reproduction flash: same pair C/D co-located (use new sim to avoid interactions)
+    # Reproduction: same pair C/D co-located (use new sim to avoid interactions)
     sim2 = Simulation(width=10, height=10)
     c = Automaton(letter="C", x=2, y=5, energy=70.0)
     d = Automaton(letter="D", x=2, y=5, energy=70.0)
     sim2.add(c)
     sim2.add(d)
     sim2.step(0.0)
-    assert c.repro_flash >= 0 and d.repro_flash >= 0
+    # After reproduction, a newborn appears in the same cell
+    assert any(a is not c and a is not d and int(round(a.x)) == 2 and int(round(a.y)) == 5 for a in sim2.automata)
 
 
 def test_same_cell_predation_reverse_branch():

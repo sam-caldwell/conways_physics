@@ -10,7 +10,6 @@ from typing import List
 from rich.text import Text
 
 from .sim import Simulation
-from .automata import Automaton
 
 
 def slope_char(prev_y: int, y: int, next_y: int) -> str:

@@ -12,7 +12,6 @@ from textual.containers import Vertical
 from textual.widgets import Static, Footer
 from textual.reactive import reactive
 from textual import events
-import random
 
 from .sim import Simulation
 from .config import DEFAULT_WIDTH, DEFAULT_HEIGHT, DAY_LENGTH_S
@@ -35,7 +34,7 @@ class GameplayPanel(Static):
         """Render the world into this panel's bounds."""
         w = max(1, self.size.width)
         h = max(1, self.size.height)
-        # Ensure surface spans the full current view and sits near the bottom
+        # Ensure the surface spans the full current view and sits near the bottom
         if (self.sim.width != w) or (self.sim.height != h):
             self.sim.configure_surface_for_view(w, h, sea_level_offset=4, amplitude=3)
         return render_sim(self.sim, w, h)
@@ -45,18 +44,25 @@ class StatusPanel(Static):
     """Footer panel displaying summary details and timing."""
     text = reactive("")
 
-    def update_status(self, *, N: int, speed: float, is_day: bool, days: int, runtime_s: float) -> None:
+    def update_status(self, *, N: int, speed: float, is_day: bool, days: int, runtime_s: float, avg_energy: float, spawned: int, died: int, eaten: int, rocks: int, starved: int, moves_total: int, ma3: float, ma7: float, ma14: float) -> None:
         """Update the displayed status string."""
         hh = int(runtime_s // 3600)
         mm = int((runtime_s % 3600) // 60)
         ss = int(runtime_s % 60)
         day_str = "Day" if is_day else "Night"
-        self.text = f"N={N}  speed={speed:.1f}/s  {day_str}  days={days}  run={hh:02d}:{mm:02d}:{ss:02d}"
+        self.text = (
+            f"N={N}  speed={speed:.1f}/s  {day_str}  days={days}  "
+            f"avgE={avg_energy:.1f}  spawned={spawned}  died={died}  "
+            f"eaten={eaten}  rocks={rocks}  starved={starved}  "
+            f"moves={moves_total}  ma3={ma3:.0f}  ma7={ma7:.0f}  ma14={ma14:.0f}  "
+            f"run={hh:02d}:{mm:02d}:{ss:02d}"
+        )
         self.update(self.text)
 
 
-class ConwaysApp(App):
+class ConwaysPhysics(App):
     """Textual application container for the simulation."""
+    TITLE = "Conways Physics"
     CSS = """
     Screen { layout: vertical; }
     GameplayPanel { height: 1fr; border: round white; }
@@ -68,10 +74,11 @@ class ConwaysApp(App):
         ("-", "speed_down", "Decrease speed"),
         ("p", "pause", "Pause"),
         ("s", "resume", "Resume"),
+        ("r", "recycle", "Recycle"),
         ("q", "quit", "Quit"),
     ]
     running: bool = True
-    speed_cps: float = 1.0
+    speed_cps: float = 30.0
     runtime_s: float = 0.0
     days: int = 0  # maintained for backwards-compat; display derives from t_abs
     sim: Simulation
@@ -125,6 +132,24 @@ class ConwaysApp(App):
         """Resume simulation stepping."""
         self.running = True
 
+    def action_recycle(self) -> None:
+        """Reset the world with a fresh surface and population."""
+        # Determine current viewport size and rebuild simulation
+        w = max(1, self.gameplay.size.width or DEFAULT_WIDTH)
+        h = max(1, self.gameplay.size.height or DEFAULT_HEIGHT)
+        new_sim = Simulation(width=w, height=h)
+        new_sim.auto_rocks = True
+        new_sim.configure_surface_for_view(w, h, sea_level_offset=4, amplitude=3)
+        new_sim.seed_population_balanced(100)
+        # Swap in new simulation and reset runtime counters
+        self.sim = new_sim
+        self.gameplay.sim = new_sim
+        self.runtime_s = 0.0
+        self.days = 0
+        self._accum = 0.0
+        # Trigger immediate repaint
+        self.gameplay.refresh()
+
     def _tick_sim(self) -> None:
         """Timer callback to advance simulation time appropriately."""
         if not self.running:
@@ -141,9 +166,31 @@ class ConwaysApp(App):
     def _update_status(self) -> None:
         """Timer callback to refresh the status footer."""
         alive = sum(1 for a in self.sim.automata if a.alive)
+        if alive > 0:
+            total_energy = sum(a.energy for a in self.sim.automata if a.alive)
+            avg_energy = total_energy / float(alive)
+        else:
+            avg_energy = 0.0
+        moves_total, ma3, ma7, ma14 = self.sim.movement_stats()
         days_now = int(self.sim.world.t_abs // DAY_LENGTH_S)
         self.days = days_now
-        self.status.update_status(N=alive, speed=self.speed_cps, is_day=self.sim.world.is_day, days=days_now, runtime_s=self.runtime_s)
+        self.status.update_status(
+            N=alive,
+            speed=self.speed_cps,
+            is_day=self.sim.world.is_day,
+            days=days_now,
+            runtime_s=self.runtime_s,
+            avg_energy=avg_energy,
+            spawned=self.sim.spawned_total,
+            died=self.sim.died_total,
+            eaten=self.sim.eaten_total,
+            rocks=self.sim.rock_deaths_total,
+            starved=self.sim.starved_total,
+            moves_total=moves_total,
+            ma3=ma3,
+            ma7=ma7,
+            ma14=ma14,
+        )
 
     def on_resize(self, event: events.Resize) -> None:  # type: ignore[override]
         """Resize handler to regenerate surface upon viewport changes."""
