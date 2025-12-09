@@ -1,3 +1,9 @@
+"""Text rendering for the world using Rich/Textual.
+
+The renderer produces a Text object with terrain, corpse overlays, and automata
+glyphs colored by energy. Terrain uses block characters and corpses use '#'.
+"""
+
 from __future__ import annotations
 
 from typing import List
@@ -8,7 +14,7 @@ from .automata import Automaton
 
 
 def slope_char(prev_y: int, y: int, next_y: int) -> str:
-    # Terrain rendered as ASCII 219 equivalent (full block)
+    """Return the terrain glyph (full block)."""
     return "\u2588"
 
 
@@ -33,7 +39,7 @@ COLOR_TABLE = [
 
 
 def _energy_style(energy: float) -> str:
-    # Map energy [0,100] to 0..15 color index
+    """Map energy [0, 100] to a 16-color style name."""
     e = 0.0 if energy is None else float(energy)
     if e < 0.0:
         e = 0.0
@@ -45,6 +51,7 @@ def _energy_style(energy: float) -> str:
 
 
 def render_sim(sim: Simulation, width: int, height: int) -> Text:
+    """Render the world state to a Rich Text object of given size."""
     # Build a character grid
     w, h = width, height
     grid = [[" "] * w for _ in range(h)]

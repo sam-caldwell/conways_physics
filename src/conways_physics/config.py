@@ -1,3 +1,9 @@
+"""Configuration constants for the simulation.
+
+These defaults are tuned for a stable, readable terminal simulation and may be
+adjusted as needed for different performance envelopes.
+"""
+
 from __future__ import annotations
 
 # Time

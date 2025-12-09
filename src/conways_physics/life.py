@@ -1,3 +1,5 @@
+"""Conway's Game of Life stepper (no wrapping)."""
+
 from __future__ import annotations
 
 from typing import List
@@ -38,4 +40,3 @@ def step_life(grid: List[List[int]]) -> List[List[int]]:
             else:
                 out[r][c] = 1 if n == 3 else 0
     return out
-

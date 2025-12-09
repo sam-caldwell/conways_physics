@@ -1,3 +1,5 @@
+"""Small utility helpers used across the simulation."""
+
 from __future__ import annotations
 
 from .config import DAY_LENGTH_S, DAYLIGHT_S
@@ -20,4 +22,3 @@ def is_day(t_seconds: float) -> bool:
         return False
     phase = t_seconds % DAY_LENGTH_S
     return phase < DAYLIGHT_S
-

@@ -1,3 +1,14 @@
+"""Core entity types: Automaton and Rock.
+
+This module defines the Automaton class (land and flying species) and the simple
+Rock projectile used by X/Y/Z flyers. The motion integrator models a light
+flight/ground system tuned for stability in a terminal simulation.
+
+Docstrings follow PEP 257 conventions with concise summaries and details where
+useful. Public attributes are documented via type hints; behavior is described
+on classes and methods.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +32,12 @@ from .utils import clamp
 
 @dataclass
 class Automaton:
+    """A single automaton with simple Newtonian dynamics and energy.
+
+    Automata may be landers (A..M) or flyers (N..Z). Flyers prefer flight when
+    they have sufficient energy and will actively climb until they reach a
+    preferred altitude above the local terrain.
+    """
     letter: str
     x: float
     y: float
@@ -32,27 +49,46 @@ class Automaton:
     repro_flash: int = 0  # green for 1 cycle before/after reproduction
 
     def can_move(self) -> bool:
+        """Return True if the automaton has enough energy to move."""
         return self.energy > ENERGY_MIN_MOVE and self.alive
 
     def can_fly(self) -> bool:
+        """Return True if this automaton is a flyer with enough energy to fly."""
         return is_flyer_letter(self.letter) and self.energy > ENERGY_MIN_FLY and self.alive
 
     def apply_sunlight(self, per_second: float, dt: float) -> None:
+        """Increase energy by the sunlit rate times ``dt``.
+
+        Parameters:
+            per_second: Energy gain per second.
+            dt: Time delta in seconds.
+        """
         if not self.alive:
             return
         self.energy = clamp(self.energy + per_second * dt, 0.0, ENERGY_MAX)
 
     def eat_gain(self, meals: float = 1.0) -> None:
+        """Increase energy as if the automaton consumed ``meals`` meals.
+
+        Also triggers a brief eat flash for visual feedback.
+        """
         if not self.alive:
             return
         self.energy = clamp(self.energy + meals * E_MEAL, 0.0, ENERGY_MAX)
-        # Trigger eat flash for 2 cycles
         self.eat_flash = max(self.eat_flash, 2)
 
     def kill(self) -> None:
+        """Mark the automaton as no longer alive."""
         self.alive = False
 
     def tick_motion(self, dt: float, ground_y: float, width: int) -> None:
+        """Advance position/velocity by ``dt`` seconds.
+
+        Parameters:
+            dt: Time step in seconds (non-negative).
+            ground_y: The terrain surface row at the current ``x``.
+            width: World width for wraparound.
+        """
         if not self.alive:
             return
 
@@ -111,9 +147,11 @@ class Automaton:
 
     @property
     def starving(self) -> bool:
+        """Return True if energy is below the move threshold."""
         return self.energy < ENERGY_MIN_MOVE
 
     def tick_flashes(self) -> None:
+        """Decay any transient visual flash counters by one step."""
         if self.eat_flash > 0:
             self.eat_flash -= 1
         if self.repro_flash > 0:
@@ -122,12 +160,14 @@ class Automaton:
 
 @dataclass
 class Rock:
+    """A simple falling rock with vertical velocity only."""
     x: float
     y: float
     vy: float = 0.0
     active: bool = True
 
     def step(self, dt: float, ground_y: float) -> None:
+        """Integrate the rock for a single time step ``dt``."""
         if not self.active:
             return
         self.vy += GRAVITY * dt
@@ -135,5 +175,5 @@ class Rock:
         # Ground absorption handled by Simulation to allow impact checks first
 
     def impact_energy(self) -> float:
-        # Kinetic energy before deactivation
+        """Return the current kinetic energy for collision calculations."""
         return 0.5 * (self.vy * self.vy)

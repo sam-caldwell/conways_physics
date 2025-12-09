@@ -1,3 +1,10 @@
+"""World simulation orchestration.
+
+This module implements the main simulation loop and systems for predation,
+reproduction, rock updates, corpse handling, and terrain sizing. It coordinates
+with Automaton physics and the renderer.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,10 +30,12 @@ import random
 
 
 def same_cell(a: Automaton, b: Automaton) -> bool:
+    """Return True if two automata occupy the same integer cell."""
     return int(round(a.x)) == int(round(b.x)) and int(round(a.y)) == int(round(b.y))
 
 
 def adjacent_positions(ax: int, ay: int) -> List[Tuple[int, int]]:
+    """Return the 4-neighborhood positions around (ax, ay)."""
     return [
         (ax, ay - 1),  # above
         (ax - 1, ay),  # left
@@ -37,6 +46,7 @@ def adjacent_positions(ax: int, ay: int) -> List[Tuple[int, int]]:
 
 @dataclass
 class Simulation:
+    """Top-level world state and stepping logic."""
     width: int = DEFAULT_WIDTH
     height: int = DEFAULT_HEIGHT
     world: World = field(default_factory=World)
@@ -56,7 +66,7 @@ class Simulation:
         amplitude: int = 3,
         seed: int | None = None,
     ) -> None:
-        """Resize the simulation to the view and regenerate the surface.
+        """Resize world and regenerate surface to match a viewport.
 
         The resulting surface spans the full width with a baseline 4 rows above the bottom
         by default, varying ±3 rows.
@@ -89,7 +99,7 @@ class Simulation:
                 a.y = float(max(0, min(self.height - 1, new_y)))
 
     def seed_population(self, count: int, *, seed: int | None = None) -> None:
-        """Seed the world with a number of automata across random species and genders.
+        """Seed with randomly distributed automata across species/genders.
 
         - For paired species (A..Y), pick a species pair uniformly and then a gender (first/second letter) at random.
         - Include Z occasionally; Z has no gender and is a flyer.
@@ -121,7 +131,7 @@ class Simulation:
                 y = max(0, gy - 1)
                 vx = rng.uniform(-0.5, 0.5)
                 vy = 0.0
-            energy = rng.uniform(30.0, 80.0)
+            energy = 100.0
             self.add(Automaton(letter=letter, x=float(x), y=float(y), energy=energy, vx=vx, vy=vy))
 
     def seed_population_balanced(self, total: int = 100, *, seed: int | None = None) -> None:
@@ -149,7 +159,7 @@ class Simulation:
             y = max(0, gy - 1)
             vx = rng.uniform(-0.5, 0.5)
             vy = 0.0
-            energy = rng.uniform(30.0, 80.0)
+            energy = 100.0
             self.add(Automaton(letter=letter, x=float(x), y=float(y), energy=energy, vx=vx, vy=vy))
 
         for _ in range(flyers_target):
@@ -160,7 +170,7 @@ class Simulation:
             y = rng.randint(0, top_cap) if top_cap > 0 else 0
             vx = rng.uniform(-0.5, 0.5)
             vy = 0.0
-            energy = rng.uniform(30.0, 80.0)
+            energy = 100.0
             self.add(Automaton(letter=letter, x=float(x), y=float(y), energy=energy, vx=vx, vy=vy))
 
     def __post_init__(self) -> None:
@@ -170,15 +180,21 @@ class Simulation:
             self.life_grid = [[0 for _ in range(self.width)] for _ in range(self.height)]
 
     def ground_y_at(self, x: float) -> float:
+        """Return the terrain surface row at column ``x`` (with wrapping)."""
         if self.width == 0:
             return float(self.height - 1)
         idx = int(round(x)) % self.width
         return float(self.terrain[idx])
 
     def add(self, a: Automaton) -> None:
+        """Add an automaton to the world."""
         self.automata.append(a)
 
     def drop_rock_from(self, a: Automaton) -> bool:
+        """Attempt to spawn a rock from automaton ``a``.
+
+        Returns True on success.
+        """
         if not a.alive:
             return False
         c = a.letter.upper()
@@ -191,6 +207,7 @@ class Simulation:
         return True
 
     def step(self, dt: float) -> None:
+        """Advance the entire simulation by ``dt`` seconds."""
         # Advance world clock
         self.world.tick(dt)
 
@@ -274,6 +291,7 @@ class Simulation:
             self.corpses.discard(pos)
 
     def _update_rocks(self, dt: float) -> None:
+        """Integrate and resolve rock impacts."""
         for r in self.rocks:
             if not r.active:
                 continue
@@ -302,6 +320,7 @@ class Simulation:
                 r.y = self.ground_y_at(r.x)
 
     def _resolve_predation(self) -> None:
+        """Apply predation interactions based on adjacency and vision rules."""
         # Build cell map for speed
         cell_map: dict[Tuple[int, int], List[int]] = {}
         for idx, a in enumerate(self.automata):
@@ -360,6 +379,7 @@ class Simulation:
                             attacker.eat_gain(1.0)
 
     def _can_eat(self, attacker: Automaton, prey: Automaton, *, same_cell: bool, vertical_relation: int) -> bool:
+        """Return True if ``attacker`` can eat ``prey`` under current relation."""
         if not attacker.alive or not prey.alive:
             return False
         att_is_fly = is_flyer_letter(attacker.letter)
@@ -390,6 +410,7 @@ class Simulation:
         return True
 
     def _resolve_reproduction(self) -> None:
+        """Spawn newborns for valid pairings and Z asexual reproduction."""
         # Map cell occupancy
         cell_map: dict[Tuple[int, int], List[int]] = {}
         for idx, a in enumerate(self.automata):
@@ -448,6 +469,7 @@ class Simulation:
 
     # Surface absorption helpers
     def _bury(self, a: Automaton) -> None:
+        """Mark an automaton as dead and record a corpse on the surface."""
         a.kill()
         if self.width > 0:
             xi = int(round(a.x)) % self.width
@@ -456,6 +478,7 @@ class Simulation:
             self.corpses.add((yi, xi))
 
     def _bury_at_x(self, x: int) -> None:
+        """Increase the terrain stack at column ``x`` (used by rock impacts)."""
         if self.width <= 0:
             return
         idx = x % self.width

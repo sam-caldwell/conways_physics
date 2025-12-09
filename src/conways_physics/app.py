@@ -1,3 +1,10 @@
+"""Textual TUI application for the Conways Physics simulation.
+
+Provides the main gameplay panel, status footer, and app lifecycle. The app
+uses a fixed timer to gate simulation cycles based on the current speed for a
+smooth, predictable feel.
+"""
+
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
@@ -13,6 +20,7 @@ from .renderer import render_sim
 
 
 class GameplayPanel(Static):
+    """Panel responsible for rendering the world state."""
     sim: Simulation
 
     def __init__(self, sim: Simulation) -> None:
@@ -24,6 +32,7 @@ class GameplayPanel(Static):
         self.set_interval(0.1, self.refresh)
 
     def render(self):  # type: ignore[override]
+        """Render the world into this panel's bounds."""
         w = max(1, self.size.width)
         h = max(1, self.size.height)
         # Ensure surface spans the full current view and sits near the bottom
@@ -33,9 +42,11 @@ class GameplayPanel(Static):
 
 
 class StatusPanel(Static):
+    """Footer panel displaying summary details and timing."""
     text = reactive("")
 
     def update_status(self, *, N: int, speed: float, is_day: bool, days: int, runtime_s: float) -> None:
+        """Update the displayed status string."""
         hh = int(runtime_s // 3600)
         mm = int((runtime_s % 3600) // 60)
         ss = int(runtime_s % 60)
@@ -45,6 +56,7 @@ class StatusPanel(Static):
 
 
 class ConwaysApp(App):
+    """Textual application container for the simulation."""
     CSS = """
     Screen { layout: vertical; }
     GameplayPanel { height: 1fr; border: round white; }
@@ -69,6 +81,7 @@ class ConwaysApp(App):
     _base_tick: float = 0.05  # 20 Hz timer; we gate sim cycles by speed_cps
 
     def compose(self) -> ComposeResult:
+        """Construct the layout and initialize the simulation."""
         self.sim = Simulation(width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT)
         self.sim.auto_rocks = True
         self.gameplay = GameplayPanel(self.sim)
@@ -80,6 +93,7 @@ class ConwaysApp(App):
         )
 
     def on_mount(self) -> None:
+        """Set up timers and seed the world when the app mounts."""
         # Size-aware surface configuration
         w = max(1, self.gameplay.size.width or DEFAULT_WIDTH)
         h = max(1, self.gameplay.size.height or DEFAULT_HEIGHT)
@@ -92,21 +106,27 @@ class ConwaysApp(App):
         self._status_timer = self.set_interval(0.2, self._update_status)
 
     def action_quit(self) -> None:
+        """Quit the application."""
         self.exit(0)
 
     def action_speed_up(self) -> None:
+        """Increase the simulation rate."""
         self.speed_cps = min(60.0, self.speed_cps + 1.0)
 
     def action_speed_down(self) -> None:
+        """Decrease the simulation rate."""
         self.speed_cps = max(1.0, self.speed_cps - 1.0)
 
     def action_pause(self) -> None:
+        """Pause simulation stepping."""
         self.running = False
 
     def action_resume(self) -> None:
+        """Resume simulation stepping."""
         self.running = True
 
     def _tick_sim(self) -> None:
+        """Timer callback to advance simulation time appropriately."""
         if not self.running:
             return
         # Gate fixed-size sim cycles by speed
@@ -119,12 +139,14 @@ class ConwaysApp(App):
             # days displayed is derived in _update_status via t_abs
 
     def _update_status(self) -> None:
+        """Timer callback to refresh the status footer."""
         alive = sum(1 for a in self.sim.automata if a.alive)
         days_now = int(self.sim.world.t_abs // DAY_LENGTH_S)
         self.days = days_now
         self.status.update_status(N=alive, speed=self.speed_cps, is_day=self.sim.world.is_day, days=days_now, runtime_s=self.runtime_s)
 
     def on_resize(self, event: events.Resize) -> None:  # type: ignore[override]
+        """Resize handler to regenerate surface upon viewport changes."""
         # Reconfigure surface to span new viewport
         w = max(1, self.gameplay.size.width or DEFAULT_WIDTH)
         h = max(1, self.gameplay.size.height or DEFAULT_HEIGHT)

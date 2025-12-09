@@ -1,3 +1,5 @@
+"""Terrain helpers to generate surface height maps."""
+
 from __future__ import annotations
 
 from typing import List
