@@ -1,0 +1,106 @@
+### OS/macOS
+.DS_Store
+
+### IDEs / Editors
+.idea/
+.vscode/
+*.code-workspace
+.venv
+
+### Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+### Python environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+### Python packaging / build artifacts
+build/
+dist/
+wheels/
+share/python-wheels/
+downloads/
+eggs/
+.eggs/
+sdist/
+var/
+lib/
+lib64/
+parts/
+*.egg-info/
+*.egg
+.installed.cfg
+pip-wheel-metadata/
+
+### PyInstaller
+*.manifest
+*.spec
+
+### Test / Coverage / Tox
+.pytest_cache/
+.tox/
+.nox/
+.coverage*
+coverage.xml
+htmlcov/
+*.cover
+*.py,cover
+.hypothesis/
+
+### Type checkers / linters cache
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+
+### PEP 582
+__pypackages__/
+
+### Logs and caches
+*.cache
+*.log
+
+### Editor swap files
+*.swp
+*.swo
+
+### Binaries (legacy / optional)
+bin/
+
+### CMake (legacy from prior C++ phase)
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+rules.ninja
+build.ninja
+.ninja_log
+.ninja_deps
+
+### Native build artifacts (legacy)
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.pdb
+*.dSYM/

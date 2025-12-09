@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conways-physics"
+version = "0.0.0"
+description = "Zero-player physics world driven by GoL in a Textual TUI"
+requires-python = ">=3.10"
+authors = [
+  { name = "Sam Caldwell", email = "mail@samcaldwell.net" },
+]
+license = { text = "MIT" }
+dependencies = [
+  "textual",
+  "rich",
+  "numpy",
+  "numba",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-q --cov=src/conways_physics --cov-report=term-missing --cov-fail-under=95"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/conways_physics"]
+omit = [
+  "src/conways_physics/app.py",
+  "src/conways_physics/__main__.py",
+  "src/conways_physics/renderer.py",
+]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = false
