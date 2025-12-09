@@ -70,7 +70,12 @@ class Simulation:
     # -----------------------------
     # Small internal helpers (no behavioral changes; reduce duplication)
     # -----------------------------
-    def _age_and_collect(self, ages: dict[tuple[int, int], float], dt: float, threshold: float) -> list[tuple[int, int]]:
+    def _age_and_collect(
+        self,
+        ages: dict[tuple[int, int], float],
+        dt: float,
+        threshold: float,
+    ) -> list[tuple[int, int]]:
         """Increment ages by dt and return positions whose age crosses ``threshold``.
 
         This utility reduces duplication between corpse and rock decay logic.
@@ -312,8 +317,16 @@ class Simulation:
                         and random.random() < LANDER_JUMP_CHANCE
                     ):
                         tgt_ix = (ix0 + dir_h * LANDER_JUMP_DISTANCE_CELLS) % max(1, self.width)
-                        cur_h = int(round(self.terrain[ix0])) if self.terrain else int(round(self.ground_y_at(a.x)))
-                        tgt_h = int(round(self.terrain[tgt_ix])) if self.terrain else int(round(self.ground_y_at(tgt_ix)))
+                        cur_h = (
+                            int(round(self.terrain[ix0]))
+                            if self.terrain
+                            else int(round(self.ground_y_at(a.x)))
+                        )
+                        tgt_h = (
+                            int(round(self.terrain[tgt_ix]))
+                            if self.terrain
+                            else int(round(self.ground_y_at(tgt_ix)))
+                        )
                         ascend = cur_h - tgt_h
                         landing_cell = (max(0, min(self.height - 1, tgt_h - 1)), tgt_ix)
                         if (
@@ -580,7 +593,7 @@ class Simulation:
         self._decay_corpses(dt)
         self._decay_rocks(dt)
 
-        # Apply species transformations (every 30 days of lifetime), after 
+        # Apply species transformations (every 30 days of lifetime), after
         # reproduction and A/B auto-spawn have been processed in this step.
         if transform_period < float('inf'):
             for a in self.automata:

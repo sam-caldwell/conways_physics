@@ -30,4 +30,3 @@ def test_flyer_drop_action_path_monkeypatched(monkeypatch):
     rocks_before = len(sim.rocks)
     sim.step(0.1)
     assert len(sim.rocks) >= rocks_before + 1
-

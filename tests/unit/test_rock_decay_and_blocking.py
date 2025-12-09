@@ -23,4 +23,3 @@ def test_static_rock_blocks_and_decays_into_terrain():
     assert (ry, x) not in sim.rocks_static
     assert (ry, x) not in sim.rocks_age
     assert sim.terrain[x] == max(0, gy - 1)
-
