@@ -116,8 +116,9 @@ def test_movement_gating_and_world_wrap():
 
 def test_flyer_distance_attack_within_two_cells(monkeypatch):
     sim = Simulation(width=10, height=10)
-    flyer = Automaton(letter="N", x=7, y=2, energy=50.0)
-    lander = Automaton(letter="A", x=7, y=4, energy=50.0)
+    # Landers can eat flyers within two cells horizontally (left/right)
+    lander = Automaton(letter="A", x=5, y=5, energy=50.0)
+    flyer = Automaton(letter="N", x=7, y=5, energy=50.0)
     sim.add(flyer)
     sim.add(lander)
     # ensure detection at distance 2 passes the coin toss
@@ -125,4 +126,4 @@ def test_flyer_distance_attack_within_two_cells(monkeypatch):
     import conways_physics.sim as sim_mod
     monkeypatch.setattr(sim_mod.random, "random", lambda: 0.0)
     sim.step(0.0)
-    assert lander.alive is False
+    assert flyer.alive is False

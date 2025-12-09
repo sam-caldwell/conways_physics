@@ -8,14 +8,8 @@ from .automata import Automaton
 
 
 def slope_char(prev_y: int, y: int, next_y: int) -> str:
-    # Choose '/', '\\', or '_' based on local slope
-    left = prev_y - y
-    right = next_y - y
-    if left < 0 or right < 0:
-        return "/"
-    if left > 0 or right > 0:
-        return "\\"
-    return "_"
+    # Terrain rendered as dots only, regardless of slope
+    return "."
 
 
 def render_sim(sim: Simulation, width: int, height: int) -> Text:
