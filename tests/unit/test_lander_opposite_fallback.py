@@ -32,4 +32,3 @@ def test_lander_tries_left_when_right_blocked():
     # Right is blocked by terrain; should try left instead
     assert int(round(a.x)) in (1, 2)
     assert int(round(a.x)) != 3
-

@@ -39,4 +39,3 @@ def test_ab_no_autospawn_when_surrounded():
     # No new C/D spawned
     cds = [b for b in sim.automata if b.letter.upper() in ("C", "D") and b is not a]
     assert len(cds) == 0
-

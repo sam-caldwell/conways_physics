@@ -27,7 +27,7 @@ from .config import (
     LANDER_JUMP_DISTANCE_CELLS,
     LANDER_JUMP_CHANCE,
 )
-from .species import is_flyer_letter, pair_index, letter_order, relative_rank
+from .species import is_flyer_letter, pair_index, relative_rank
 from .terrain import flat_terrain, generate_surface
 from .life import step_life
 from .world import World
@@ -439,15 +439,24 @@ class Simulation:
                         sign = -1
                 if sign != 0:
                     # Cooldown check
-                    cooldown_s = LANDER_JUMP_COOLDOWN_DAYS * DAY_LENGTH_S if DAY_LENGTH_S > 0 else float('inf')
-                    if (self.world.t_abs - getattr(a, 'last_jump_time_s', -1e18)) >= cooldown_s and random.random() < LANDER_JUMP_CHANCE:
+                    cooldown_s = (
+                        LANDER_JUMP_COOLDOWN_DAYS * DAY_LENGTH_S if DAY_LENGTH_S > 0 else float('inf')
+                    )
+                    if (
+                        (self.world.t_abs - getattr(a, 'last_jump_time_s', -1e18)) >= cooldown_s
+                        and random.random() < LANDER_JUMP_CHANCE
+                    ):
                         tgt_ix = (prev_ix + sign * LANDER_JUMP_DISTANCE_CELLS) % self.width
                         cur_h = int(round(self.terrain[prev_ix]))
                         tgt_h = int(round(self.terrain[tgt_ix]))
                         ascend = cur_h - tgt_h  # positive means target is higher ground
                         # Check ascent limit and ensure landing cell not blocked by rock/corpse
                         landing_cell = (max(0, min(self.height - 1, tgt_h - 1)), tgt_ix)
-                        if ascend <= LANDER_JUMP_ASCENT_MAX_CELLS and landing_cell not in rock_cells and landing_cell not in self.corpses:
+                        if (
+                            ascend <= LANDER_JUMP_ASCENT_MAX_CELLS
+                            and landing_cell not in rock_cells
+                            and landing_cell not in self.corpses
+                        ):
                             # Perform jump: place on air boundary of target column
                             a.x = float(tgt_ix)
                             a.y = float(landing_cell[0])
@@ -557,6 +566,7 @@ class Simulation:
         and divide by the number of days included, up to the window size.
         """
         series = self.day_moves[:] + [self.moves_today]
+
         def avg(n: int) -> float:
             if not series:
                 return 0.0
@@ -642,9 +652,9 @@ class Simulation:
                     if not aj.alive:
                         continue
                     if self._can_eat(ai, aj, same_cell=True, vertical_relation=0):
-                            if not self._ab_retaliation(ai, aj):
-                                self._bury(aj, cause="eaten")
-                                ai.eat_gain(1.0)
+                        if not self._ab_retaliation(ai, aj):
+                            self._bury(aj, cause="eaten")
+                            ai.eat_gain(1.0)
                     elif self._can_eat(aj, ai, same_cell=True, vertical_relation=0):
                         if not self._ab_retaliation(aj, ai):
                             self._bury(ai, cause="eaten")
@@ -843,7 +853,6 @@ class Simulation:
                 (ay, (ax + 1) % self.width),  # right
                 (ay + 1, ax),  # down
             ]
-            placed = False
             for cy, cx in candidates:
                 if cy < 0 or cy >= self.height:
                     continue
@@ -861,7 +870,6 @@ class Simulation:
                 self.add(Automaton(letter=child_letter, x=float(cx), y=float(cy), energy=50.0))
                 # Reset timer
                 a.since_repro_s = 0.0
-                placed = True
                 # Mark occupied to avoid double placement in this pass
                 occ.add((cy, cx))
                 break

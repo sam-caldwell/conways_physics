@@ -16,4 +16,3 @@ def test_idle_lander_loses_energy_when_blocked_no_eat_no_repro():
     with patch('conways_physics.sim.random.random', return_value=1.0):  # avoid jump chance
         sim.step(0.5)
     assert a.energy < e0
-

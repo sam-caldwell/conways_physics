@@ -151,9 +151,7 @@ class Automaton:
         """Return True if energy is below the move threshold."""
         return self.energy < ENERGY_MIN_MOVE
 
-    
-
-
+ 
 @dataclass
 class Rock:
     """A simple falling rock with vertical velocity only."""

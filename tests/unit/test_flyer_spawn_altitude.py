@@ -31,4 +31,3 @@ def test_seed_population_balanced_flyers_spawn_high_top_third_and_altitude():
     sim.configure_surface_for_view(120, 60, sea_level_offset=4, amplitude=3, seed=11)
     sim.seed_population_balanced(100, seed=13)
     _assert_flyer_altitudes(sim)
-

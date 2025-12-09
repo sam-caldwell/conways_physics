@@ -44,7 +44,25 @@ class StatusPanel(Static):
     """Footer panel displaying summary details and timing."""
     text = reactive("")
 
-    def update_status(self, *, N: int, speed: float, is_day: bool, days: int, runtime_s: float, avg_energy: float, spawned: int, died: int, eaten: int, rocks: int, starved: int, moves_total: int, ma3: float, ma7: float, ma14: float) -> None:
+    def update_status(
+        self,
+        *,
+        N: int,
+        speed: float,
+        is_day: bool,
+        days: int,
+        runtime_s: float,
+        avg_energy: float,
+        spawned: int,
+        died: int,
+        eaten: int,
+        rocks: int,
+        starved: int,
+        moves_total: int,
+        ma3: float,
+        ma7: float,
+        ma14: float,
+    ) -> None:
         """Update the displayed status string."""
         hh = int(runtime_s // 3600)
         mm = int((runtime_s % 3600) // 60)

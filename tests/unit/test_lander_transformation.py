@@ -27,4 +27,3 @@ def test_lander_may_become_flyer_after_transform():
     sim.step(30.0 * DAY_LENGTH_S + 0.1)
     assert m.letter.upper() == "O"
     assert is_flyer_letter(m.letter) is True
-

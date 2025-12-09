@@ -34,4 +34,3 @@ def test_non_cd_does_not_dig_and_is_blocked():
     assert int(round(a.x)) == 0
     # Terrain unchanged at x=1
     assert sim.terrain[1] == 9
-
